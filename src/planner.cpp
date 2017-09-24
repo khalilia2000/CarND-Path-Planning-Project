@@ -365,10 +365,12 @@ bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<d
     vector<double> car_behind= sensor_fusion_data_for_car_behind(sensor_fusion, car_lane+possible_lanes[i], car_s);
 
     // define variables for car ahead
+    int other_car_id = car_ahead[0];
     double other_car_x = car_ahead[1];
     double other_car_y = car_ahead[2];
     double other_car_vx = car_ahead[3];
     double other_car_vy = car_ahead[4];
+    double other_car_s = car_ahead[5];
 
     // calculate the distance shift due to time lag of xy_trajectory
     double delta_x = other_car_vx * delta_t;
@@ -379,7 +381,11 @@ bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<d
     {
       double now_x = other_car_x + other_car_vx * (j+1) * time_interval_between_points + delta_x;
       double now_y = other_car_y + other_car_vy * (j+1) * time_interval_between_points + delta_y;
-      if (Helper::distance(now_x, now_y, xy_trajectory[0][j], xy_trajectory[1][j]) <= collision_distance) {result = true;} 
+      if (Helper::distance(now_x, now_y, xy_trajectory[0][j], xy_trajectory[1][j]) <= collision_distance) 
+      {
+          result = true;
+          cout << "collision predicted with car: " << other_car_id << "with s = " << other_car_s << endl;
+      } 
     }
 
     if (possible_lanes[i] != 0)

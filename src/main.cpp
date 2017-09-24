@@ -226,19 +226,21 @@ int main() {
                 }
 
                 // convert to fine trajectory
-                auto current_fine_trajectory = p.generate_fine_from_coarse_trajectory(current_coarse_trajectory[0], current_coarse_trajectory[1], {end_pos_x, end_pos_y, ref_yaw});
-                all_fine_trajectories.push_back(current_fine_trajectory);
+                auto cur_fine_traj = p.generate_fine_from_coarse_trajectory(current_coarse_trajectory[0], current_coarse_trajectory[1], {end_pos_x, end_pos_y, ref_yaw});
+                // copy unused points from previous path received from the simulator
+                auto combined_fine_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, cur_fine_traj, p.num_points_in_trajectory);
+                all_fine_trajectories.push_back(combined_fine_trajectory);
 
                 // calculate and save cost for trajectory
-                bool will_collide = p.will_collide(sensor_fusion, current_fine_trajectory, path_size * p.time_interval_between_points, p.get_current_lane_for_d(end_pos_d), car_s);
+                bool will_collide = p.will_collide(sensor_fusion, combined_fine_trajectory, 0, p.get_current_lane_for_d(car_d), car_s);
                 double cost = 0;
                 if (will_collide)
                 {
-                  cost = 1.0e20;
+                  cost = 1.0e10;
                 }
                 else 
                 {
-                  cost = p.estimate_cost_for_trajectory({end_pos_x, end_pos_y, ref_yaw, ref_speed}, current_fine_trajectory, map_waypoints_x, map_waypoints_y); 
+                  cost = p.estimate_cost_for_trajectory({end_pos_x, end_pos_y, ref_yaw, ref_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y); 
                 }
                 all_costs.push_back(cost);
               }
@@ -274,19 +276,8 @@ int main() {
               }
 
               // copy unused points from previous path received from the simulator
-              for(int i=0; i<path_size; i++)
-              {
-                next_x_vals.push_back(previous_path_x[i]);
-                next_y_vals.push_back(previous_path_y[i]);
-              }
-
-              // add new points at the end to bring the number to 50
-              for (int i=0; i<p.num_points_in_trajectory-path_size; i++)
-              {
-              	next_x_vals.push_back(selected_fine_trajectory[0][i]);
-              	next_y_vals.push_back(selected_fine_trajectory[1][i]);
-              }
-
+              next_x_vals = selected_fine_trajectory[0];
+              next_y_vals = selected_fine_trajectory[1];
 
             // AK End
 
@@ -342,83 +333,3 @@ int main() {
   }
   h.run();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

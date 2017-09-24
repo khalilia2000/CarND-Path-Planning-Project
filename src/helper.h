@@ -54,6 +54,9 @@ public:
   // print to console for debugging purposes
   static void debug_print(string title, vector<double> anything);
 
+  // combine trajectories
+  static vector<vector<double>> combine_trajectories(vector<vector<double>> trajectory_1, vector<vector<double>> trajectory_2, int num_points);
+
 };
 
 #endif /* HELER_H_ */

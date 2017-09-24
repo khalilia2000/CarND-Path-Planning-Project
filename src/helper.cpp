@@ -198,4 +198,38 @@ void Helper::debug_print(string title, vector<double> anything)
 	cout << endl;
 }
 
+// combine trajectories
+// only return size num_points number of points
+vector<vector<double>> Helper::combine_trajectories(vector<vector<double>> trajectory_1, vector<vector<double>> trajectory_2, int num_points)
+{
+	vector<double> result_x;
+	vector<double> result_y;
+
+	if (trajectory_1[0].size() >= num_points)
+	{
+		for (int i=0; i<num_points; i++)
+		{
+			result_x.push_back(trajectory_1[0][i]);
+			result_y.push_back(trajectory_1[1][i]);
+		}
+	}
+	else
+	{
+		for (int i=0; i<trajectory_1[0].size(); i++)
+		{
+			result_x.push_back(trajectory_1[0][i]);
+			result_y.push_back(trajectory_1[1][i]);
+		}
+
+		for (int i=0; i<num_points-trajectory_1[0].size(); i++)
+		{
+			result_x.push_back(trajectory_2[0][i]);
+			result_y.push_back(trajectory_2[1][i]);
+		}
+
+	}
+
+	return {result_x, result_y};
+}
+
 
