@@ -34,7 +34,7 @@ public:
   // maximum allowed speeds on the road in miles per hour
   double max_speed = 50;
   // target speed
-  double target_speed = 40;
+  double target_speed = 0;
   // number of points to send to simulator
   int num_points_in_trajectory = 50;
   // time interval between points
@@ -43,10 +43,10 @@ public:
   double safe_distance_from_other_cars = 30;
   // collision distance - limit beyond whitch cars will collide
   double collision_distance = 5;
-  // meter per second to mile per house conversion factor
-  double conversion_factor_mph_to_mps = 2.23694;
-  // smoothing distance at the end of tranjecotires to make sure car is parallel ot the road
-  double smoothing_distance = 10;
+  // meter per second to mile per house conversion factor - multiply mps by this factor to get mph
+  double conversion_factor_mps_to_mph = 2.23694;
+  // smoothing ratio at the end of tranjecotires to make sure car is parallel ot the road
+  double smoothing_ratio = 0.30;
   // number of tranjectories to build in each lane
   int num_trajectories_for_each_lane = 50;
   // maximum allowable acceleration in m/s2
@@ -71,7 +71,7 @@ public:
   vector<vector<double>> generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw);
 
   // calculate various metrics for a given trajectory
-  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y); 
+  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion); 
 
   // determine if trajectory collides with another car
   bool will_collide(vector<vector<double>> sensor_fusion, vector<vector<double>> xy_trajectory, double delta_t, int car_lane, double car_s);

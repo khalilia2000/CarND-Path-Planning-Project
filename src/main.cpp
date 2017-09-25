@@ -18,7 +18,7 @@ using namespace std;
 using json = nlohmann::json;
 
 // verbose state for debugging
-int verbose_counter = 0;
+int verbose_counter = 1;
 bool verbose() { 
 	return (verbose_counter>0); 
 }
@@ -36,6 +36,13 @@ string hasData(string s) {
     return s.substr(b1, b2 - b1 + 2);
   }
   return "";
+}
+
+int master_counter = 0;
+int get_counter() 
+{
+	master_counter++;
+	return(master_counter);
 }
 
 
@@ -77,16 +84,13 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  // Ali K defining target_speed
-  double target_speed = 0.0;
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&target_speed](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  // AK defined variables
+  Planner p;
+  p.target_speed = 0;
+
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&p](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
-    
-    // Ali Khalili defining target_lane and target_speed
-    int target_lane = 1;
-    bool too_close_ahead = false;
-    Planner p;
 
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -129,7 +133,11 @@ int main() {
             
             // AK Begin
 
-          	  verbose_counter--;
+          	  Helper::debug_print("max_speed, target_speed, car_speed: ", {p.max_speed, p.target_speed, car_speed});
+          	  if (p.target_speed < p.max_speed - 2.5)
+          	  {
+          	  	p.target_speed += 0.4;
+          	  }
 
 	          // Define all variables
 	          vector<double> ptsx;
@@ -201,9 +209,9 @@ int main() {
 	              cout << all_coarse_trajectories.size() << endl;
 	              for (int i=0; i<all_coarse_trajectories.size(); i++)
 	              {
-	                //cout << "trajectory " << i << endl;
-	                //Helper::debug_print("s_points: ", all_coarse_trajectories[i][0]);
-	                //Helper::debug_print("d_points: ", all_coarse_trajectories[i][1]);
+	                cout << "trajectory " << i << endl;
+	                Helper::debug_print("s_points: ", all_coarse_trajectories[i][0]);
+	                Helper::debug_print("d_points: ", all_coarse_trajectories[i][1]);
 	              }
 	              cout << "----------------" << endl;
 	          }
@@ -231,6 +239,13 @@ int main() {
                 auto combined_fine_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, cur_fine_traj, p.num_points_in_trajectory);
                 all_fine_trajectories.push_back(combined_fine_trajectory);
 
+                if (verbose()) 
+                {
+                	cout << "trajectory " << i << endl;
+                	Helper::debug_print("fine_traj x: ", combined_fine_trajectory[0]);
+                	Helper::debug_print("fine_traj y: ", combined_fine_trajectory[1]);
+                }
+
                 // calculate and save cost for trajectory
                 bool will_collide = p.will_collide(sensor_fusion, combined_fine_trajectory, 0, p.get_current_lane_for_d(car_d), car_s);
                 double cost = 0;
@@ -240,14 +255,14 @@ int main() {
                 }
                 else 
                 {
-                  cost = p.estimate_cost_for_trajectory({end_pos_x, end_pos_y, ref_yaw, ref_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y); 
+                  cost = p.estimate_cost_for_trajectory({car_x, car_y, Helper::deg2rad(car_yaw), car_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion); 
                 }
                 all_costs.push_back(cost);
               }
 
               // select trajectory with minimum cost
-              double min_cost = 1e7;
-              double index = 0;
+              double min_cost = 1e20;
+              double index = -1;
               bool changed = false;
               for (int i=0; i<all_costs.size(); i++) 
               {
@@ -260,12 +275,13 @@ int main() {
               }
               if (!changed)
               {
-              	cout << "all bad trajectories - car_s: " << car_s << endl;
+              	cout << "all bad trajectories - car_s: " << car_s << "cost = " << min_cost << endl;
               }
               vector<vector<double>> selected_fine_trajectory = all_fine_trajectories[index];
 
               if (verbose())
               {
+              	  cout << "---------------" << endl;
 	              cout << "index = " << index << endl;
 	              Helper::debug_print("all_costs: ", all_costs);
 	              Helper::debug_print("selected_fine_trajectory.size(): ", {(double)selected_fine_trajectory.size()});
@@ -275,9 +291,25 @@ int main() {
 	              Helper::debug_print("selected fine trajectory y_points: ", selected_fine_trajectory[1]);
               }
 
-              // copy unused points from previous path received from the simulator
-              next_x_vals = selected_fine_trajectory[0];
-              next_y_vals = selected_fine_trajectory[1];
+              // // copy unused points from previous path received from the simulator
+              // if (get_counter()==1)
+              // {
+                  next_x_vals = selected_fine_trajectory[0];
+                  next_y_vals = selected_fine_trajectory[1];
+              // }
+              // else
+              // {
+              // 	for(int i=0; i<path_size; i++)
+	             //  {
+	             //    next_x_vals.push_back(previous_path_x[i]);
+	             //    next_y_vals.push_back(previous_path_y[i]);
+	             //  }
+              // }
+              // if (next_x_vals.size()==0)
+              // {
+              // 	return;
+              // }
+              
 
             // AK End
 
