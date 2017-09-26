@@ -5,7 +5,7 @@ Planner::Planner() {}
 Planner::~Planner() {}
 
 // return current lane based on d
-int Planner::get_current_lane_for_d(double d) 
+int Planner::get_lane_for_d(double d) 
 {
   if (d==number_of_lanes*lane_width) 
   {
@@ -18,14 +18,14 @@ int Planner::get_current_lane_for_d(double d)
 }
 
 // return d value for the center of the lane - lane = 0 is the left most lane
-double Planner::get_d_for_current_lane(int lane) 
+double Planner::get_d_for_lane(int lane) 
 {
 	return (lane_width/2+lane_width*lane);
 }
 
 
 // generate all possible states from the current state
-vector<int> Planner::generate_possible_lanes_to_explore(int current_lane)
+vector<int> Planner::possible_lanes_to_explore(int current_lane)
 {
   vector<int> possible_lanes;
   possible_lanes.push_back(0);
@@ -46,65 +46,51 @@ vector<int> Planner::generate_possible_lanes_to_explore(int current_lane)
 
 
 // generate all possible tranjectories using only few points that are spaced far apart
-// will return points in xy coordinates
-vector<vector<vector<double>>> Planner::generate_trajectory_coarse(int current_lane, double given_s, 
-  vector<double> given_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) 
+// will return points in xy coordinates - i.e. map coordinates
+vector<vector<vector<double>>> Planner::generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xy, vector<double> prev_xy, 
+  vector<double> maps_s, vector<double> maps_x, vector<double> maps_y) 
 {
 
+  // result
   vector<vector<vector<double>>> result_trajectories;  
-  
-  double delta_s = max_speed / conversion_factor_mps_to_mph;
-  delta_s *= num_points_in_trajectory * time_interval_between_points;
-
-  // define possible lanes for making trajectories
-  vector<int> possible_lanes = generate_possible_lanes_to_explore(current_lane);
 
   // generate trajectories
-  for (int j=0; j<possible_lanes.size(); j++)
+  for (int i=0; i<abs_possible_lanes.size(); i++)
   {
-  	int ref_lane = current_lane + possible_lanes[j];
-    for (int i=1; i<=num_trajectories_for_each_lane; i++)
-    {
-      // define vectors
-      vector<vector<double>> trajectory; 
-      vector<double> pts_x; 
-      vector<double> pts_y;
-      
-      // define 2 end points
-      double current_distance = delta_s / num_trajectories_for_each_lane * i;
-  
-      double target1_s = given_s + (1 - smoothing_ratio) * current_distance;
-      double target2_s = target1_s + (smoothing_ratio * 0.5) * current_distance;
-      double target3_s = target2_s + (smoothing_ratio * 0.5) * current_distance;
-      double target1_d = get_d_for_current_lane(ref_lane);
-      double target2_d = target1_d;
-      double target3_d = target2_d;
 
-      vector<double> target1_xy = Helper::getXY(target1_s, target1_d, maps_s, maps_x, maps_y);
-      vector<double> target2_xy = Helper::getXY(target2_s, target2_d, maps_s, maps_x, maps_y);
-      vector<double> target3_xy = Helper::getXY(target3_s, target3_d, maps_s, maps_x, maps_y);
-      
-      // create waypoints for s
-      pts_x.push_back(prev_xy[0]);
-      pts_x.push_back(given_xy[0]);
-      pts_x.push_back(target1_xy[0]);
-      pts_x.push_back(target2_xy[0]);
-      pts_x.push_back(target3_xy[0]);
-      
-      // create wayponts for d
-      pts_y.push_back(prev_xy[1]);
-      pts_y.push_back(given_xy[1]);
-      pts_y.push_back(target1_xy[1]);
-      pts_y.push_back(target2_xy[1]);
-      pts_y.push_back(target3_xy[1]);
-      
-      // add waypoints to the trajectory
-      trajectory.push_back(pts_x);
-      trajectory.push_back(pts_y);
-      
-      // add to all_trajectories
-      result_trajectories.push_back(trajectory);
-    }
+    int ref_lane = abs_possible_lanes[i];
+
+    // define vectors
+    vector<double> pts_x; 
+    vector<double> pts_y;
+
+    double target1_s = car_s + 30;
+    double target2_s = target1_s + 30;
+    double target3_s = target2_s + 30;
+    double target1_d = get_d_for_lane(ref_lane);
+    double target2_d = target1_d;
+    double target3_d = target2_d;
+
+    vector<double> target1_xy = Helper::getXY(target1_s, target1_d, maps_s, maps_x, maps_y);
+    vector<double> target2_xy = Helper::getXY(target2_s, target2_d, maps_s, maps_x, maps_y);
+    vector<double> target3_xy = Helper::getXY(target3_s, target3_d, maps_s, maps_x, maps_y);
+    
+    // create waypoints for s
+    pts_x.push_back(prev_xy[0]);
+    pts_x.push_back(end_xy[0]);
+    pts_x.push_back(target1_xy[0]);
+    pts_x.push_back(target2_xy[0]);
+    pts_x.push_back(target3_xy[0]);
+    
+    // create wayponts for d
+    pts_y.push_back(prev_xy[1]);
+    pts_y.push_back(end_xy[1]);
+    pts_y.push_back(target1_xy[1]);
+    pts_y.push_back(target2_xy[1]);
+    pts_y.push_back(target3_xy[1]);
+    
+    // add to all_trajectories
+    result_trajectories.push_back({pts_x, pts_y});
 
   }
 
@@ -113,48 +99,84 @@ vector<vector<vector<double>>> Planner::generate_trajectory_coarse(int current_l
 
 
 // generate fine trajectory from coarse trajectory of a few points
-// x=0 y=0 is the vehicle position. All ptsx, and ptxy coordinates are in vehicle coordinates 
+// x=0 y=0 is the vehicle position in ptsx and ptsy. i.e. All ptsx, and ptxy coordinates are in vehicle coordinates 
 // given_xyyaw is the location and heading of the car in mapt coordinates
-vector<vector<double>> Planner::generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw)
+vector<vector<vector<double>>> Planner::generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose)
 {
 
+
+  if (verbose)
+  {
+    Helper::debug_print("ptsx in generate_fine... ", ptsx);
+    Helper::debug_print("ptsx in generate_fine... ", ptsy);
+  }
+
 	// result arrays
-	vector<double> x_results;
-	vector<double> y_results;
-	vector<vector<double>> result;
+	vector<vector<vector<double>>> result;
 
 	// create and fit a spline object
-    tk::spline sp1;
-    sp1.set_points(ptsx, ptsy);
+  tk::spline sp1;
+  sp1.set_points(ptsx, ptsy);
 
-    // maximum delta x from x=0
-    double delta_x = ptsx.back(); //-ptsx[0];
+  // maximum distance without going over max_speed
+  double target_x = max_speed / conversion_factor_mps_to_mph * num_points_in_trajectory * time_interval_between_points;
+  double target_y = sp1(target_x);
+  double target_dist = Helper::distance(0, 0, target_x, target_y);
 
-    for (int i=1; i<=num_points_in_trajectory; i++) 
+  if (verbose) 
+  {
+    Helper::debug_print("target_x, target_y, target_dist: ", {target_x, target_y, target_dist});
+  }
+
+  for (int i=0; i<num_trajectories_for_each_lane; i++)
+  {
+
+    double ref_speed = (double)(i+1) / num_trajectories_for_each_lane * target_speed;
+    double increment_distance = time_interval_between_points * (ref_speed / conversion_factor_mps_to_mph);
+    double num_points = (target_dist / increment_distance);
+
+    if (verbose) 
     {
-    	// calculate x and y along the x axis
-    	double x_point = delta_x * (double)i / num_points_in_trajectory;
+      Helper::debug_print("ref_speed, increment_distance, num_points: ", {ref_speed, increment_distance, num_points});
+    }
+
+
+    vector<double> x_results;
+    vector<double> y_results;
+
+    for (int j=0; j<num_points_in_trajectory; j++) 
+    {
+
+      double x_point = target_x * (j+1) / num_points;
       double y_point = sp1(x_point);
 
-      // shift to map coordinates
       vector<double> vehicle_coords = Helper::get_map_coords_from_vehicle_coords(x_point, y_point, given_xyyaw);
+
       x_results.push_back(vehicle_coords[0]);
       y_results.push_back(vehicle_coords[1]);
 
     }
 
     // set up results
-    result.push_back(x_results);
-    result.push_back(y_results);
+    result.push_back({x_results, y_results});
 
-    return result;
+  }
+
+  return result;
 }
 
 // calculate various metrics for a given trajectory
 // return values will be delta_s, v_min, v_max, s_2dot_max, d_2dot_max, a_max, s_3dot_max, d_3dot, j_max 
 double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, 
-  vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion) 
+  vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose) 
 {
+
+  if (verbose)
+  {
+    Helper::debug_print("x,y,yaw,speed: ", car_xyyawspeed);
+    Helper::debug_print("passed on x_traj: ", xy_traj[0]);
+    Helper::debug_print("passed on y_traj: ", xy_traj[1]);
+  }
 
   // current car locations
   double ref_x = car_xyyawspeed[0];
@@ -244,9 +266,12 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
     jerk_abs.push_back(j_abs);
   }
 
-  Helper::debug_print("speed_abs: ", speed_abs);
-  Helper::debug_print("acc_abs: ", acc_abs);
-  Helper::debug_print("jerk_abs: ", jerk_abs);
+  if (verbose)
+  {
+    Helper::debug_print("speed_abs: ", speed_abs);
+    Helper::debug_print("acc_abs: ", acc_abs);
+    Helper::debug_print("jerk_abs: ", jerk_abs);
+  }
 
   // for going over the speed limit
   double cost1 = 0;
@@ -272,7 +297,7 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
   {
     if (acc_abs[i] >= max_acceleration)
     {
-      cost3 += 100;
+      cost3 += 20;
     }
   }
 
@@ -282,33 +307,13 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
   {
     if (jerk_abs[i] >= max_jerk)
     {
-      cost4 += 100;
+      cost4 += 15;
     }
   }
 
-  // // for high normal acceleration
-  double cost5 = 0;
-  // for (int i=0; i<acc_n.size(); i++)
-  // {
-  //   if (acc_n[i] >= max_acceleration*0.3)
-  //   {
-  //     cost5 += 2000;
-  //   }
-  // }
-
-  // // for high normal jerk
-  double cost6 = 0;
-  // for (int i=0; i<jerk_n.size(); i++)
-  // {
-  //   if (jerk_n[i] >= max_jerk*0.3)
-  //   {
-  //     cost6 += 2000;
-  //   }
-  // }
-
   // encourage faster speeds
   double cost7 = 0;
-  cost7 = (ref_s-sd_traj[0].back())*100;
+  cost7 = (ref_s-sd_traj[0].back())*10;
 
   // distance from the car ahead
   double cost8 = 0;
@@ -316,7 +321,7 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
   {
     double cur_point_s = sd_traj[0][i];
     double cur_point_d = sd_traj[1][i];
-    int cur_point_lane = get_current_lane_for_d(cur_point_d);
+    int cur_point_lane = get_lane_for_d(cur_point_d);
     vector<double> car_ahead_sf_data = sensor_fusion_data_for_car_ahead(sensor_fusion, cur_point_lane, cur_point_s);
     double car_ahead_vx = car_ahead_sf_data[3];
     double car_ahead_vy = car_ahead_sf_data[4];
@@ -331,15 +336,17 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
 
   cost8 = 0;
 
-  cout << cost1 << " ";
-  cout << cost2 << " ";
-  cout << cost3 << " ";
-  cout << cost4 << " ";
-  cout << cost5 << " ";
-  cout << cost6 << " ";
-  cout << cost7 << " ";
-  cout << cost8 << " " << endl;
-	return cost1+cost2+cost3+cost4+cost5+cost6+cost7+cost8;
+  if (true)
+  {
+    cout << cost1 << " ";
+    cout << cost2 << " ";
+    cout << cost3 << " ";
+    cout << cost4 << " ";
+    cout << cost7 << " ";
+    cout << cost8 << " " << endl;
+  }
+
+	return cost1+cost2+cost3+cost4+cost7+cost8;
 }
 
 
@@ -350,7 +357,7 @@ bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<d
 {
   
   bool result = false;
-  vector<int> possible_lanes = generate_possible_lanes_to_explore(car_lane);
+  vector<int> possible_lanes = possible_lanes_to_explore(car_lane);
 
   for (int i=0; i<possible_lanes.size(); i++)
   {

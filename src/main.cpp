@@ -18,10 +18,19 @@ using namespace std;
 using json = nlohmann::json;
 
 // verbose state for debugging
-int verbose_counter = 1;
+int verbose_counter = 0;
 bool verbose() { 
 	return (verbose_counter>0); 
 }
+
+void turn_verbose_off() {
+  verbose_counter = 0;
+}
+
+void turn_verbose_on() {
+  verbose_counter = 1;
+}
+
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -132,16 +141,25 @@ int main() {
           	vector<double> next_y_vals;
             
             // AK Begin
-
-          	  Helper::debug_print("max_speed, target_speed, car_speed: ", {p.max_speed, p.target_speed, car_speed});
-          	  if (p.target_speed < p.max_speed - 2.5)
-          	  {
-          	  	p.target_speed += 0.4;
-          	  }
+              //Helper::debug_print("max_speed, target_speed, car_speed: ", {p.max_speed, p.target_speed, car_speed});
+        	  if (p.target_speed < p.max_speed - 1.0)
+        	  {
+        	  	p.target_speed += 5;
+        	  }
 
 	          // Define all variables
 	          vector<double> ptsx;
 	          vector<double> ptsy;
+
+              int tmp_cntr = get_counter();
+              if (verbose())
+              {
+                cout << endl;
+                cout << endl;
+                cout << "------------------------" << endl;
+                cout << "counter: " << tmp_cntr << endl;
+                cout << "------------------------" << endl;
+              }
 	            
               double end_pos_x = 0; 
               double end_pos_y = 0;
@@ -152,8 +170,6 @@ int main() {
               double ref_distance = 0;
               double prev_pos_x = 0;
               double prev_pos_y = 0;
-              // double prev_pos_s = 0;
-              // double prev_pos_d = 0;
               int path_size = previous_path_x.size();
 
               // create initial 2 points with right heading from the current car location
@@ -169,7 +185,7 @@ int main() {
                 ref_speed = car_speed;
                 if (verbose())
                 {
-                  cout << endl << "Starting with loop1 - path_size = " << path_size << endl;
+                  cout << "Starting with loop1 - path_size = " << path_size << endl;
                   Helper::debug_print("car_yaw, ref_yaw: ", {car_yaw, ref_yaw});
                 }
               }
@@ -186,35 +202,40 @@ int main() {
                 ref_speed = ref_distance / p.time_interval_between_points;
                 if (verbose())
                 {
-                  cout << endl << "Starting with loop2 - path_size = " << path_size << endl;
+                  cout << "Starting with loop2 - path_size = " << path_size << endl;
                   Helper::debug_print("car_yaw, ref_yaw: ", {car_yaw, ref_yaw});
                 }
               }
 
-              vector<double> end_frenet = Helper::getFrenet(end_pos_x, end_pos_y, ref_yaw, map_waypoints_x, map_waypoints_y);
-              end_pos_s = end_frenet[0];
-              end_pos_d = end_frenet[1];
+              end_pos_s = end_path_s;
+              end_pos_d = end_path_d;
 
-              // generate trajectories - given_sdyaw, prev_sdyaw should be properly compiled
-              int ref_lane = p.get_current_lane_for_d(end_pos_d);
-              auto all_coarse_trajectories = p.generate_trajectory_coarse(ref_lane, end_pos_s, {end_pos_x, end_pos_y}, {prev_pos_x, prev_pos_y}, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              // generate trajectories
+              int car_lane = p.get_lane_for_d(car_d);
+              int end_pos_lane = p.get_lane_for_d(end_pos_d);
+              vector<int> abs_possible_lanes = {1};
+              auto all_coarse_trajectories = p.generate_trajectory_coarse(abs_possible_lanes, car_s, {end_pos_x, end_pos_y}, {prev_pos_x, prev_pos_y}, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    
 
               if (verbose())
-	          {
-	          	  Helper::debug_print("ref_lane: ", {(double)ref_lane});
-	              Helper::debug_print("car x,y,s,d,yaw, speed: ", {car_x, car_y, car_s, car_d, car_yaw, car_speed});
-	              Helper::debug_print("end_pos_x,y,s,d: ", {end_pos_x, end_pos_y, end_pos_s, end_pos_d});
-	              Helper::debug_print("prev_pos_x,y: ", {prev_pos_x, prev_pos_y});
-	              Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
-	              cout << all_coarse_trajectories.size() << endl;
-	              for (int i=0; i<all_coarse_trajectories.size(); i++)
-	              {
-	                cout << "trajectory " << i << endl;
-	                Helper::debug_print("s_points: ", all_coarse_trajectories[i][0]);
-	                Helper::debug_print("d_points: ", all_coarse_trajectories[i][1]);
-	              }
-	              cout << "----------------" << endl;
-	          }
+  	          {
+  	          	  Helper::debug_print("end_pos_lane: ", {(double)end_pos_lane});
+  	              Helper::debug_print("car x,y,s,d,yaw, speed: ", {car_x, car_y, car_s, car_d, car_yaw, car_speed});
+  	              Helper::debug_print("end_pos_x,y,s,d: ", {end_pos_x, end_pos_y, end_pos_s, end_pos_d});
+  	              Helper::debug_print("prev_pos_x,y: ", {prev_pos_x, prev_pos_y});
+  	              Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
+                  Helper::debug_print("previous_path_x: ", previous_path_x);
+                  Helper::debug_print("previous_path_y: ", previous_path_y);
+
+  	              cout << "number of generated coarse trajectories: " << all_coarse_trajectories.size() << endl;
+  	              for (int i=0; i<all_coarse_trajectories.size(); i++)
+  	              {
+  	                cout << "trajectory " << i << endl;
+  	                Helper::debug_print("map x_points: ", all_coarse_trajectories[i][0]);
+  	                Helper::debug_print("map y_points: ", all_coarse_trajectories[i][1]);
+  	              }
+  	              cout << "----------------" << endl;
+  	          }
 
               // generate costs
               vector<double> all_costs;
@@ -226,38 +247,49 @@ int main() {
                 auto current_coarse_trajectory = all_coarse_trajectories[i];
 
                 // convert from Frenet to car reference coordinates
-                for (int i = 0; i<current_coarse_trajectory[0].size(); i++)
+                for (int j = 0; j<current_coarse_trajectory[0].size(); j++)
                 {
-                  vector<double> vehicle_coords = Helper::get_vehicle_coords_from_map_coords(current_coarse_trajectory[0][i], current_coarse_trajectory[1][i], {end_pos_x, end_pos_y, ref_yaw});
-                  current_coarse_trajectory[0][i] = vehicle_coords[0];
-                  current_coarse_trajectory[1][i] = vehicle_coords[1];
+                  vector<double> vehicle_coords = Helper::get_vehicle_coords_from_map_coords(current_coarse_trajectory[0][j], current_coarse_trajectory[1][j], {end_pos_x, end_pos_y, ref_yaw});
+                  current_coarse_trajectory[0][j] = vehicle_coords[0];
+                  current_coarse_trajectory[1][j] = vehicle_coords[1];
                 }
 
                 // convert to fine trajectory
-                auto cur_fine_traj = p.generate_fine_from_coarse_trajectory(current_coarse_trajectory[0], current_coarse_trajectory[1], {end_pos_x, end_pos_y, ref_yaw});
+                auto cur_fine_traj = p.generate_fine_from_coarse_trajectory(current_coarse_trajectory[0], current_coarse_trajectory[1], {end_pos_x, end_pos_y, ref_yaw}, verbose());
+                
+
                 // copy unused points from previous path received from the simulator
-                auto combined_fine_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, cur_fine_traj, p.num_points_in_trajectory);
-                all_fine_trajectories.push_back(combined_fine_trajectory);
+                for (int j=0; j<cur_fine_traj.size(); j++)
+                {
 
-                if (verbose()) 
-                {
-                	cout << "trajectory " << i << endl;
-                	Helper::debug_print("fine_traj x: ", combined_fine_trajectory[0]);
-                	Helper::debug_print("fine_traj y: ", combined_fine_trajectory[1]);
-                }
+                  auto combined_fine_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, cur_fine_traj[j], p.num_points_in_trajectory);  
+                  all_fine_trajectories.push_back(combined_fine_trajectory);
 
-                // calculate and save cost for trajectory
-                bool will_collide = p.will_collide(sensor_fusion, combined_fine_trajectory, 0, p.get_current_lane_for_d(car_d), car_s);
-                double cost = 0;
-                if (will_collide)
-                {
-                  cost = 1.0e10;
+
+                  if (verbose()) 
+                  {
+                    cout << "------------" << endl;
+                    cout << "fine trajectory " << j << " from coarse trajectory " << i << endl;
+                    Helper::debug_print("fine_traj x: ", combined_fine_trajectory[0]);
+                    Helper::debug_print("fine_traj y: ", combined_fine_trajectory[1]);
+                  }
+
+
+                  // calculate and save cost for trajectory
+                  bool will_collide = p.will_collide(sensor_fusion, combined_fine_trajectory, 0, p.get_lane_for_d(car_d), car_s);
+                  double cost = 0;
+                  if (will_collide)
+                  {
+                    cost = 1.0e10;
+                  }
+                  else 
+                  {
+                    cost = p.estimate_cost_for_trajectory({car_x, car_y, Helper::deg2rad(car_yaw), car_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion, verbose()); 
+                  }
+                  all_costs.push_back(cost);
+
                 }
-                else 
-                {
-                  cost = p.estimate_cost_for_trajectory({car_x, car_y, Helper::deg2rad(car_yaw), car_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion); 
-                }
-                all_costs.push_back(cost);
+                
               }
 
               // select trajectory with minimum cost
@@ -290,6 +322,17 @@ int main() {
 	              Helper::debug_print("selected fine trajectory x_points: ", selected_fine_trajectory[0]);
 	              Helper::debug_print("selected fine trajectory y_points: ", selected_fine_trajectory[1]);
               }
+
+              cout << "counter: " << tmp_cntr << " - car speed: " << car_speed << " - target speed: " << p.target_speed << " - min_cost: " << min_cost << endl;
+              if (tmp_cntr > 10 && tmp_cntr < 10) 
+              {
+                turn_verbose_on();
+              } 
+              else
+              {
+                turn_verbose_off();
+              }
+              
 
               // // copy unused points from previous path received from the simulator
               // if (get_counter()==1)

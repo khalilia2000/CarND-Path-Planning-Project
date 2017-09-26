@@ -54,24 +54,24 @@ public:
   // maximum allowable jerk in m/s3
   double max_jerk = 50.0; 
 
+
   // return current lane based on d
-  int get_current_lane_for_d(double d); 
+  int get_lane_for_d(double d); 
 
   // return d value for the center of the lane - lane = 0 is the left most lane
-  double get_d_for_current_lane(int lane);
+  double get_d_for_lane(int lane);
 
   // generate all possible states from the current state
-  vector<int> generate_possible_lanes_to_explore(int current_lane);
+  vector<int> possible_lanes_to_explore(int current_lane);
 
   // generate all possible tranjectories using only few points that are spaced far apart
-  vector<vector<vector<double>>> generate_trajectory_coarse(int current_lane, double given_s, 
-    vector<double> given_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
+  vector<vector<vector<double>>> generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
 
   // generates fine trajectory from coarse trajectory of a few points
-  vector<vector<double>> generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw);
+  vector<vector<vector<double>>> generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose);
 
   // calculate various metrics for a given trajectory
-  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion); 
+  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose); 
 
   // determine if trajectory collides with another car
   bool will_collide(vector<vector<double>> sensor_fusion, vector<vector<double>> xy_trajectory, double delta_t, int car_lane, double car_s);
