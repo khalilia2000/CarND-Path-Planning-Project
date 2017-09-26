@@ -71,7 +71,7 @@ public:
   vector<vector<vector<double>>> generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose);
 
   // calculate various metrics for a given trajectory
-  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose); 
+  double estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<double> car_sd, vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose); 
 
   // determine if trajectory collides with another car
   bool will_collide(vector<vector<double>> sensor_fusion, vector<vector<double>> xy_trajectory, double delta_t, int car_lane, double car_s);

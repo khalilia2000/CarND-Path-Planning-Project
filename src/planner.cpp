@@ -131,7 +131,7 @@ vector<vector<vector<double>>> Planner::generate_fine_from_coarse_trajectory(vec
   for (int i=0; i<num_trajectories_for_each_lane; i++)
   {
 
-    double ref_speed = (double)(i+1) / num_trajectories_for_each_lane * target_speed;
+    double ref_speed = (double)(i+1) / num_trajectories_for_each_lane * target_speed * 1.2;
     double increment_distance = time_interval_between_points * (ref_speed / conversion_factor_mps_to_mph);
     double num_points = (target_dist / increment_distance);
 
@@ -167,9 +167,16 @@ vector<vector<vector<double>>> Planner::generate_fine_from_coarse_trajectory(vec
 
 // calculate various metrics for a given trajectory
 // return values will be delta_s, v_min, v_max, s_2dot_max, d_2dot_max, a_max, s_3dot_max, d_3dot, j_max 
-double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, 
+double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vector<double> car_sd, 
   vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose) 
 {
+
+  bool collision = will_collide(sensor_fusion, xy_traj, 0, get_lane_for_d(car_sd[1]), car_sd[0]);
+  if (collision)
+  {
+    return 1e10;
+  }
+
 
   if (verbose)
   {
@@ -232,12 +239,21 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
 		if (i==0)
 		{
 			v_abs = Helper::distance(ref_x, ref_y, xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-		}
+		  if (verbose)
+      {
+        Helper::debug_print("ref_x, y, xy_traj x, y, t, v_abs: ", {ref_x, ref_y, xy_traj[0][i], xy_traj[1][i], time_interval_between_points, v_abs});
+      }
+    }
 		else
 		{
 			v_abs = Helper::distance(xy_traj[0][i-1], xy_traj[1][i-1], xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-		}
+		  if (verbose)
+      {
+        Helper::debug_print("xy_traj x, y (i-1,i), t, v_abs: ", {xy_traj[0][i-1], xy_traj[1][i-1], xy_traj[0][i], xy_traj[1][i], time_interval_between_points, v_abs});
+      }
+    }
 		speed_abs.push_back(v_abs);
+
 	}
 
   // calculate the acceleration vectors
@@ -297,7 +313,7 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
   {
     if (acc_abs[i] >= max_acceleration)
     {
-      cost3 += 20;
+      cost3 += 30;
     }
   }
 
@@ -312,11 +328,11 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
   }
 
   // encourage faster speeds
-  double cost7 = 0;
-  cost7 = (ref_s-sd_traj[0].back())*10;
+  double cost5 = 0;
+  cost5 = (ref_s-sd_traj[0].back())*10;
 
   // distance from the car ahead
-  double cost8 = 0;
+  double cost6 = 0;
   for (int i=0; i<sd_traj[0].size(); i++)
   {
     double cur_point_s = sd_traj[0][i];
@@ -330,11 +346,14 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
     double distance_ahead = car_ahead_s + car_ahead_v*(i+1)*time_interval_between_points - cur_point_s;
     if (distance_ahead < safe_distance_from_other_cars)
     {
-      cost8 = (safe_distance_from_other_cars - distance_ahead) * 100;
+      cost6 = (safe_distance_from_other_cars - distance_ahead) * 100;
     }
   }
 
-  cost8 = 0;
+  // cost3 = 0;
+  // cost4 = 0;
+  cost5 = 0;
+  // cost6 = 0;
 
   if (true)
   {
@@ -342,11 +361,11 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed,
     cout << cost2 << " ";
     cout << cost3 << " ";
     cout << cost4 << " ";
-    cout << cost7 << " ";
-    cout << cost8 << " " << endl;
+    cout << cost5 << " ";
+    cout << cost6 << " " << endl;
   }
 
-	return cost1+cost2+cost3+cost4+cost7+cost8;
+	return cost1+cost2+cost3+cost4+cost5+cost6;
 }
 
 

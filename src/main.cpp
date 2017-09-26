@@ -144,7 +144,7 @@ int main() {
               //Helper::debug_print("max_speed, target_speed, car_speed: ", {p.max_speed, p.target_speed, car_speed});
         	  if (p.target_speed < p.max_speed - 1.0)
         	  {
-        	  	p.target_speed += 5;
+        	  	p.target_speed += 0.5;
         	  }
 
 	          // Define all variables
@@ -278,14 +278,8 @@ int main() {
                   // calculate and save cost for trajectory
                   bool will_collide = p.will_collide(sensor_fusion, combined_fine_trajectory, 0, p.get_lane_for_d(car_d), car_s);
                   double cost = 0;
-                  if (will_collide)
-                  {
-                    cost = 1.0e10;
-                  }
-                  else 
-                  {
-                    cost = p.estimate_cost_for_trajectory({car_x, car_y, Helper::deg2rad(car_yaw), car_speed}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion, verbose()); 
-                  }
+                  cost = p.estimate_cost_for_trajectory({car_x, car_y, Helper::deg2rad(car_yaw), car_speed}, {car_s, car_d},
+                    combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion, verbose()); 
                   all_costs.push_back(cost);
 
                 }
@@ -323,8 +317,13 @@ int main() {
 	              Helper::debug_print("selected fine trajectory y_points: ", selected_fine_trajectory[1]);
               }
 
-              cout << "counter: " << tmp_cntr << " - car speed: " << car_speed << " - target speed: " << p.target_speed << " - min_cost: " << min_cost << endl;
-              if (tmp_cntr > 10 && tmp_cntr < 10) 
+              if (verbose())
+              {
+                cout << "counter: " << tmp_cntr << " - car speed: " << car_speed ;
+                cout << " - target speed: " << p.target_speed << " - min_cost: ";
+                cout << min_cost << " - index: " << index << endl;
+              }
+              if (tmp_cntr > 2 && tmp_cntr < 2) 
               {
                 turn_verbose_on();
               } 
