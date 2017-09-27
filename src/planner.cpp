@@ -24,25 +24,54 @@ double Planner::get_d_for_lane(int lane)
 }
 
 
-// generate all possible states from the current state
-vector<int> Planner::possible_lanes_to_explore(int current_lane)
+// update state
+void Planner::update_state(int ref_lane, bool too_close_ahead)
 {
-  vector<int> possible_lanes;
-  possible_lanes.push_back(0);
-  if (state == "ECL")
+  if (state=="KL" && too_close_ahead)
   {
-    if (current_lane < number_of_lanes-1) 
-    {
-      possible_lanes.push_back(1);
-    } 
-    else if (current_lane > 0) 
-    {
-      possible_lanes.push_back(-1);
-    } 
+    state = "ECL";
   }
+  else if (state=="PCL" && ref_lane==target_lane)
+  {
+    state = "KL";
+  }
+  else if (state=="ECL" && target_lane!=ref_lane)
+  {
+    state = "PCL";
+  }
+}
+
+// generate all possible states from the current state
+vector<int> Planner::possible_lanes_to_explore(int ref_lane)
+{
+
+  vector<int> possible_lanes;
+  
+  if (state=="ECL")
+  {
+    possible_lanes.push_back(ref_lane);
+    if (ref_lane < number_of_lanes-1) 
+    {
+      possible_lanes.push_back(ref_lane + 1);
+    } 
+    if (ref_lane > 0) 
+    {
+      possible_lanes.push_back(ref_lane - 1);
+    }    
+  }
+  else if (state=="PCL")
+  {
+    possible_lanes.push_back(target_lane);  
+  }
+  else if (state=="KL")
+  {
+    possible_lanes.push_back(ref_lane);   
+  }
+ 
   //return possible_lanes;
   return possible_lanes;
 }
+
 
 
 // generate all possible tranjectories using only few points that are spaced far apart
@@ -123,8 +152,6 @@ vector<vector<double>> Planner::generate_fine_trajectory_at_target_speed(vector<
   double target_x = target_speed / conversion_factor_mps_to_mph * num_points_in_trajectory * time_interval_between_points;
   double target_y = sp1(target_x);
   double target_dist = Helper::distance(0, 0, target_x, target_y);
-
-  Helper::debug_print("target_speed, x, y, dist: ", {target_speed, target_x, target_y, target_dist});
 
   double increment_distance = time_interval_between_points * (target_speed / conversion_factor_mps_to_mph);
   double num_points = (target_dist / increment_distance);
@@ -334,96 +361,13 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
     Helper::debug_print("jerk_abs: ", jerk_abs);
   }
 
-  // for going over the speed limit
-  double cost1 = 0;
-  for (int i=0; i<speed_abs.size(); i++)
-  {
-    if (speed_abs[i]>max_speed / conversion_factor_mps_to_mph)
-    {
-      cost1 += 1000;
-    }
-  }
-
-  // for deviating from the target_speed
-  double cost2 = 0;
-  for (int i=0; i<speed_abs.size(); i++)
-  {
-    cost2 += 5*abs(speed_abs[i] - target_speed/conversion_factor_mps_to_mph);
-  }
   
 
-  // for high acceleration
-  double cost3 = 0;
-  for (int i=0; i<acc_abs.size(); i++)
-  {
-    if (acc_abs[i] >= max_acceleration)
-    {
-      cost3 += 30;
-    }
-  }
-
-  // for high jerk
-  double cost4 = 0;
-  for (int i=0; i<jerk_abs.size(); i++)
-  {
-    if (jerk_abs[i] >= max_jerk)
-    {
-      cost4 += 15;
-    }
-  }
-
   // encourage faster speeds
-  double cost5 = 0;
-  cost5 = (ref_s-sd_traj[0].back())*10;
+  double cost1 = 0;
+  cost1 = (ref_s-sd_traj[0].back())*10;
 
-  // distance from the car ahead
-  double cost6 = 0;
-  int cur_lane = get_lane_for_d(car_sd[1]);
-  vector<double> car_ahead_sf_data_cur_lane = sensor_fusion_data_for_car_ahead(sensor_fusion, cur_lane, car_sd[0]);
-  double car_ahead_vx = car_ahead_sf_data_cur_lane[3];
-  double car_ahead_vy = car_ahead_sf_data_cur_lane[4];
-  double car_ahead_v = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
-  double car_ahead_s = car_ahead_sf_data_cur_lane[5];
-  double distance_ahead = car_ahead_s + car_ahead_v*num_points_in_trajectory*time_interval_between_points - sd_traj[0].back();
-  if (distance_ahead < safe_distance_from_other_cars)
-  {
-    cost6 += (safe_distance_from_other_cars - distance_ahead) * 100;
-    cout << "distance_ahead: " << distance_ahead << endl;
-  }
-  int end_lane = get_lane_for_d(sd_traj[1].back());
-  vector<double> car_ahead_sf_data_end_lane = sensor_fusion_data_for_car_ahead(sensor_fusion, end_lane, sd_traj[0].back());
-  car_ahead_vx = car_ahead_sf_data_end_lane[3];
-  car_ahead_vy = car_ahead_sf_data_end_lane[4];
-  car_ahead_v = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
-  car_ahead_s = car_ahead_sf_data_end_lane[5];
-  distance_ahead = car_ahead_s  + car_ahead_v*num_points_in_trajectory*time_interval_between_points - sd_traj[0].back();
-  if (distance_ahead < safe_distance_from_other_cars)
-  {
-    cost6 += (safe_distance_from_other_cars - distance_ahead) * 100;
-    cout << "distance_ahead: " << distance_ahead << endl;
-  }
-
-  // cout << "car ahead ID, s: " << car_ahead_sf_data_cur_lane[0] << " " << car_ahead_sf_data_cur_lane[5] << endl;
-  // cout << "car ahead ID, s: " << car_ahead_sf_data_end_lane[0] << " " << car_ahead_sf_data_end_lane[5] << endl;
-
-
-
-  // cost3 = 0;
-  // cost4 = 0;
-  cost5 = 0;
-  // cost6 = 0;
-
-  if (verbose)
-  {
-    cout << cost1 << " ";
-    cout << cost2 << " ";
-    cout << cost3 << " ";
-    cout << cost4 << " ";
-    cout << cost5 << " ";
-    cout << cost6 << " " << endl;
-  }
-
-	return cost1+cost2+cost3+cost4+cost5+cost6;
+	return cost1;
 }
 
 
@@ -438,8 +382,8 @@ bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<d
 
   for (int i=0; i<possible_lanes.size(); i++)
   {
-    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, car_lane+possible_lanes[i], car_s);
-    vector<double> car_behind= sensor_fusion_data_for_car_behind(sensor_fusion, car_lane+possible_lanes[i], car_s);
+    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, possible_lanes[i], car_s);
+    vector<double> car_behind= sensor_fusion_data_for_car_behind(sensor_fusion, possible_lanes[i], car_s);
 
     // define variables for car ahead
     int other_car_id = car_ahead[0];
@@ -464,7 +408,7 @@ bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<d
       } 
     }
 
-    if (possible_lanes[i] != 0)
+    if (possible_lanes[i] != car_lane)
     {
       // define variables for car behind
       other_car_id = car_behind[0];
@@ -602,11 +546,9 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
       current_n = sp1(current_t);
       //
       new_t_traj.push_back(current_t);
-      new_n_traj.push_back(current_n);
-
-      cout << current_velocity << " ";
+      new_n_traj.push_back(current_n);  
     }
-    cout << endl;
+    
 
     // convert back to map coordinates
     vector<double> new_x_traj;

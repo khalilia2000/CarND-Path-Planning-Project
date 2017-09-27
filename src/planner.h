@@ -26,6 +26,7 @@ public:
   // current state of the finite state machine
   // KL: Keep Lane
   // ECL: Explore Change Lane
+  // PCL: Perform Change Lane
   string state = "KL"; 
   // number of lanes
   int number_of_lanes = 3;
@@ -53,6 +54,8 @@ public:
   double max_acceleration = 10.0;
   // maximum allowable jerk in m/s3
   double max_jerk = 10.0; 
+  // target lane
+  int target_lane = 1;
 
 
   // return current lane based on d
@@ -61,8 +64,11 @@ public:
   // return d value for the center of the lane - lane = 0 is the left most lane
   double get_d_for_lane(int lane);
 
+  // update state
+  void update_state(int ref_lane, bool too_close_ahead);
+
   // generate all possible states from the current state
-  vector<int> possible_lanes_to_explore(int current_lane);
+  vector<int> possible_lanes_to_explore(int ref_lane);
 
   // generate all possible tranjectories using only few points that are spaced far apart
   vector<vector<vector<double>>> generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
