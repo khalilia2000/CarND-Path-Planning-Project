@@ -67,6 +67,9 @@ public:
   // generate all possible tranjectories using only few points that are spaced far apart
   vector<vector<vector<double>>> generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
 
+  // generate fine trajectory from coarse trajectory of a few points
+  vector<vector<double>> generate_fine_trajectory_at_target_speed(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose);
+
   // generates fine trajectory from coarse trajectory of a few points
   vector<vector<vector<double>>> generate_fine_from_coarse_trajectory(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose);
 
@@ -84,6 +87,12 @@ public:
 
   // return optimized trajectory from a given trajectory. will spread the points along the trajectory to minimize acceleration change
   vector<vector<double>> optimize_trajectory(vector<double> car_xyyaw, vector<vector<double>> xy_traj);
+
+  // determine if the vehicle is too close to the car ahead
+  bool is_too_close_ahead(vector<vector<double>> sensor_fusion, int ref_lane, double ref_s, double time_shift);
+
+  // update target speed
+  void update_target_speed(bool is_too_close_ahead);
 
 };
 

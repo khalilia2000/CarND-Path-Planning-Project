@@ -71,6 +71,7 @@ vector<vector<vector<double>>> Planner::generate_trajectory_coarse(vector<int> a
     double target2_d = target1_d;
     double target3_d = target2_d;
 
+    // convert to map coordinate
     vector<double> target1_xy = Helper::getXY(target1_s, target1_d, maps_s, maps_x, maps_y);
     vector<double> target2_xy = Helper::getXY(target2_s, target2_d, maps_s, maps_x, maps_y);
     vector<double> target3_xy = Helper::getXY(target3_s, target3_d, maps_s, maps_x, maps_y);
@@ -95,6 +96,56 @@ vector<vector<vector<double>>> Planner::generate_trajectory_coarse(vector<int> a
   }
 
   return result_trajectories;
+}
+
+
+// generate fine trajectory from coarse trajectory of a few points
+// x=0 y=0 is the vehicle position in ptsx and ptsy. i.e. All ptsx, and ptxy coordinates are in vehicle coordinates 
+// given_xyyaw is the location and heading of the car in mapt coordinates
+vector<vector<double>> Planner::generate_fine_trajectory_at_target_speed(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose)
+{
+
+  // convert to vehicle coordiantes
+  vector<double> veh_x_points;
+  vector<double> veh_y_points;
+  for (int i=0; i<ptsx.size(); i++)
+  {
+    vector<double> vehicle_coords = Helper::get_vehicle_coords_from_map_coords(ptsx[i], ptsy[i], given_xyyaw);
+    veh_x_points.push_back(vehicle_coords[0]);
+    veh_y_points.push_back(vehicle_coords[1]);
+  }
+
+  // create and fit a spline object
+  tk::spline sp1;
+  sp1.set_points(veh_x_points, veh_y_points);
+
+  // maximum distance without going over max_speed
+  double target_x = target_speed / conversion_factor_mps_to_mph * num_points_in_trajectory * time_interval_between_points;
+  double target_y = sp1(target_x);
+  double target_dist = Helper::distance(0, 0, target_x, target_y);
+
+  Helper::debug_print("target_speed, x, y, dist: ", {target_speed, target_x, target_y, target_dist});
+
+  double increment_distance = time_interval_between_points * (target_speed / conversion_factor_mps_to_mph);
+  double num_points = (target_dist / increment_distance);
+
+  vector<double> x_results;
+  vector<double> y_results;
+
+  for (int j=0; j<num_points_in_trajectory; j++) 
+  {
+
+    double x_point = target_x * (j+1) / num_points;
+    double y_point = sp1(x_point);
+
+    vector<double> vehicle_coords = Helper::get_map_coords_from_vehicle_coords(x_point, y_point, given_xyyaw);
+
+    x_results.push_back(vehicle_coords[0]);
+    y_results.push_back(vehicle_coords[1]);
+
+  }
+
+  return {x_results, y_results};
 }
 
 
@@ -327,22 +378,35 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
 
   // distance from the car ahead
   double cost6 = 0;
-  for (int i=0; i<sd_traj[0].size(); i++)
+  int cur_lane = get_lane_for_d(car_sd[1]);
+  vector<double> car_ahead_sf_data_cur_lane = sensor_fusion_data_for_car_ahead(sensor_fusion, cur_lane, car_sd[0]);
+  double car_ahead_vx = car_ahead_sf_data_cur_lane[3];
+  double car_ahead_vy = car_ahead_sf_data_cur_lane[4];
+  double car_ahead_v = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
+  double car_ahead_s = car_ahead_sf_data_cur_lane[5];
+  double distance_ahead = car_ahead_s + car_ahead_v*num_points_in_trajectory*time_interval_between_points - sd_traj[0].back();
+  if (distance_ahead < safe_distance_from_other_cars)
   {
-    double cur_point_s = sd_traj[0][i];
-    double cur_point_d = sd_traj[1][i];
-    int cur_point_lane = get_lane_for_d(cur_point_d);
-    vector<double> car_ahead_sf_data = sensor_fusion_data_for_car_ahead(sensor_fusion, cur_point_lane, cur_point_s);
-    double car_ahead_vx = car_ahead_sf_data[3];
-    double car_ahead_vy = car_ahead_sf_data[4];
-    double car_ahead_v = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
-    double car_ahead_s = car_ahead_sf_data[5];
-    double distance_ahead = car_ahead_s + car_ahead_v*(i+1)*time_interval_between_points - cur_point_s;
-    if (distance_ahead < safe_distance_from_other_cars)
-    {
-      cost6 = (safe_distance_from_other_cars - distance_ahead) * 100;
-    }
+    cost6 += (safe_distance_from_other_cars - distance_ahead) * 100;
+    cout << "distance_ahead: " << distance_ahead << endl;
   }
+  int end_lane = get_lane_for_d(sd_traj[1].back());
+  vector<double> car_ahead_sf_data_end_lane = sensor_fusion_data_for_car_ahead(sensor_fusion, end_lane, sd_traj[0].back());
+  car_ahead_vx = car_ahead_sf_data_end_lane[3];
+  car_ahead_vy = car_ahead_sf_data_end_lane[4];
+  car_ahead_v = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
+  car_ahead_s = car_ahead_sf_data_end_lane[5];
+  distance_ahead = car_ahead_s  + car_ahead_v*num_points_in_trajectory*time_interval_between_points - sd_traj[0].back();
+  if (distance_ahead < safe_distance_from_other_cars)
+  {
+    cost6 += (safe_distance_from_other_cars - distance_ahead) * 100;
+    cout << "distance_ahead: " << distance_ahead << endl;
+  }
+
+  // cout << "car ahead ID, s: " << car_ahead_sf_data_cur_lane[0] << " " << car_ahead_sf_data_cur_lane[5] << endl;
+  // cout << "car ahead ID, s: " << car_ahead_sf_data_end_lane[0] << " " << car_ahead_sf_data_end_lane[5] << endl;
+
+
 
   // cost3 = 0;
   // cost4 = 0;
@@ -539,10 +603,65 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
       //
       new_t_traj.push_back(current_t);
       new_n_traj.push_back(current_n);
+
+      cout << current_velocity << " ";
     }
+    cout << endl;
+
+    // convert back to map coordinates
+    vector<double> new_x_traj;
+    vector<double> new_y_traj;
+    for (int i=0; i<N; i++) 
+    {
+      vector<double> new_map_coords = Helper::get_map_coords_from_vehicle_coords(new_t_traj[i], new_n_traj[i], car_xyyaw);
+      new_x_traj.push_back(new_map_coords[0]);
+      new_y_traj.push_back(new_map_coords[1]);
+    }    
 
 
     // returen the reuslt
-    return {new_t_traj, new_n_traj};
+    return {new_x_traj, new_y_traj};
 
   }
+
+
+  // determine if the vehicle is too close to the car ahead
+  bool Planner::is_too_close_ahead(vector<vector<double>> sensor_fusion, int ref_lane, double ref_s, double time_shift)
+  {
+    // check other vehicles
+    for (int i=0; i<sensor_fusion.size(); i++)
+    {
+      double check_d = sensor_fusion[i][6];
+      if (get_lane_for_d(check_d) == ref_lane)
+      {
+        double check_vx = sensor_fusion[i][3];
+        double check_vy = sensor_fusion[i][4];
+        double check_v = sqrt(check_vx*check_vx + check_vy*check_vy);
+        double check_s = sensor_fusion[i][5];
+
+        check_s += time_shift * check_v;
+
+        if ((check_s>ref_s) && (check_s-ref_s < safe_distance_from_other_cars))
+        {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+
+  // update target speed
+  void Planner::update_target_speed(bool is_too_close_ahead) 
+  {
+    if (is_too_close_ahead || (target_speed > max_speed - 0.5))
+    {
+      target_speed -= 0.4;
+    }
+    else if (target_speed < max_speed - 0.5)
+    {
+      target_speed += 0.4; 
+    }
+  }
+
