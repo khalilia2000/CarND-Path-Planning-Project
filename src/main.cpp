@@ -150,16 +150,6 @@ int main() {
 	          // Define all variables
 	          vector<double> ptsx;
 	          vector<double> ptsy;
-
-              int tmp_cntr = get_counter();
-              if (verbose())
-              {
-                cout << endl;
-                cout << endl;
-                cout << "------------------------" << endl;
-                cout << "counter: " << tmp_cntr << endl;
-                cout << "------------------------" << endl;
-              }
 	            
               double end_pos_x = 0; 
               double end_pos_y = 0;
@@ -171,6 +161,16 @@ int main() {
               double prev_pos_x = 0;
               double prev_pos_y = 0;
               int path_size = previous_path_x.size();
+
+              int tmp_cntr = get_counter();
+              if (verbose())
+              {
+                cout << endl;
+                cout << endl;
+                cout << "------------------------" << endl;
+                cout << "counter: " << tmp_cntr << endl;
+                cout << "------------------------" << endl;
+              }
 
               // create initial 2 points with right heading from the current car location
               // or the end of previous path

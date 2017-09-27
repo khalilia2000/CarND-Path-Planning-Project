@@ -52,7 +52,7 @@ public:
   // maximum allowable acceleration in m/s2
   double max_acceleration = 10.0;
   // maximum allowable jerk in m/s3
-  double max_jerk = 50.0; 
+  double max_jerk = 10.0; 
 
 
   // return current lane based on d
@@ -81,6 +81,9 @@ public:
 
   // return sensor_fusion data for the car immediately behind in the specified lane
   vector<double> sensor_fusion_data_for_car_behind(vector<vector<double>> sensor_fusion, int ref_lane, double car_s);
+
+  // return optimized trajectory from a given trajectory. will spread the points along the trajectory to minimize acceleration change
+  vector<vector<double>> optimize_trajectory(vector<double> car_xyyaw, vector<vector<double>> xy_traj);
 
 };
 

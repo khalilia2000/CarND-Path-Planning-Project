@@ -239,22 +239,15 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
 		if (i==0)
 		{
 			v_abs = Helper::distance(ref_x, ref_y, xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-		  if (verbose)
-      {
-        Helper::debug_print("ref_x, y, xy_traj x, y, t, v_abs: ", {ref_x, ref_y, xy_traj[0][i], xy_traj[1][i], time_interval_between_points, v_abs});
-      }
     }
 		else
 		{
 			v_abs = Helper::distance(xy_traj[0][i-1], xy_traj[1][i-1], xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-		  if (verbose)
-      {
-        Helper::debug_print("xy_traj x, y (i-1,i), t, v_abs: ", {xy_traj[0][i-1], xy_traj[1][i-1], xy_traj[0][i], xy_traj[1][i], time_interval_between_points, v_abs});
-      }
     }
 		speed_abs.push_back(v_abs);
 
 	}
+
 
   // calculate the acceleration vectors
   vector<double> acc_abs;
@@ -272,6 +265,7 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
     
     acc_abs.push_back(a_abs);
   }
+
 
   // calcualte the jerk vectors
   vector<double> jerk_abs;
@@ -355,7 +349,7 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
   cost5 = 0;
   // cost6 = 0;
 
-  if (true)
+  if (verbose)
   {
     cout << cost1 << " ";
     cout << cost2 << " ";
@@ -483,3 +477,72 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
     }
   return (sensor_fusion[result_index]);
 }
+
+
+// return optimized trajectory from a given trajectory. will spread the points along the trajectory to minimize acceleration change
+  vector<vector<double>> Planner::optimize_trajectory(vector<double> car_xyyaw, vector<vector<double>> xy_traj)
+  {
+
+    // convert to vehicle coordinates
+    int N = xy_traj[0].size();
+    vector<double> t_traj;
+    vector<double> n_traj;
+    for (int i=0; i<N; i++) 
+    {
+      vector<double> veh_coords = Helper::get_vehicle_coords_from_map_coords(xy_traj[0][i], xy_traj[1][i], car_xyyaw);
+      t_traj.push_back(veh_coords[0]);
+      n_traj.push_back(veh_coords[1]);
+    }
+
+
+    // calculate total length of trejectory, initial speed, final speed, delta speed
+    double distance = 0;
+    distance += Helper::distance(0, 0, t_traj[0], n_traj[0]);
+    for (int i=0; i<N; i++)
+    {
+      distance += Helper::distance(t_traj[i], n_traj[i], t_traj[i+1], n_traj[i+1]);
+    }
+
+    double initial_velocity = Helper::distance(0, 0, t_traj[0], n_traj[0])/time_interval_between_points;
+    double final_velocity = Helper::distance(t_traj[N-2], n_traj[N-2], t_traj[N-1], n_traj[N-1])/time_interval_between_points;
+    double delta_velocity = (final_velocity - initial_velocity)/N;
+
+    // create and fit a spline object
+    tk::spline sp1;
+    sp1.set_points(t_traj, n_traj); 
+
+
+    // build new trajectory
+    vector<double> new_t_traj;
+    vector<double> new_n_traj;
+
+    // convert to map coordinate
+    double current_velocity = initial_velocity;
+    double prev_t = 0;
+    double prev_n = 0;
+    double current_t = t_traj[0];
+    double current_n = n_traj[0];
+    new_t_traj.push_back(current_t);
+    new_n_traj.push_back(current_n);
+
+
+    for (int i=1; i<N; i++)
+    {
+      double current_heading = atan2(current_n-prev_n, current_t-prev_t);
+      current_velocity += delta_velocity;
+      double delta_s = current_velocity * time_interval_between_points;
+      double detla_t = delta_s * cos(current_heading);
+      prev_t = current_t;
+      prev_n = current_n;
+      current_t += detla_t;
+      current_n = sp1(current_t);
+      //
+      new_t_traj.push_back(current_t);
+      new_n_traj.push_back(current_n);
+    }
+
+
+    // returen the reuslt
+    return {new_t_traj, new_n_traj};
+
+  }
