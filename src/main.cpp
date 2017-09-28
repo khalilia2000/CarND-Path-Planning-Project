@@ -144,30 +144,22 @@ int main() {
             double ref_yaw = 0;
             double ref_speed = 0;
             double ref_distance = 0;
+            double ref_end_s;
             double prev_pos_x = 0;
             double prev_pos_y = 0;
             int path_size = previous_path_x.size();
 
-            int tmp_cntr = get_counter();
-            cout << "Counter: " << tmp_cntr << endl;
-            if (tmp_cntr < 2) 
-            {
-              turn_verbose_on();
-            } 
-            else
-            {
-              turn_verbose_off();
-            }
-
 
             int car_lane = p.get_lane_for_d(car_d);
             int end_pos_lane = p.get_lane_for_d(end_path_d);
+            cout << "end_path_d, end_pos_lane" << end_path_d << " " << end_pos_lane << endl;
             bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, p.get_lane_for_d(end_path_d), end_path_s, path_size * p.time_interval_between_points);
             p.update_state(end_pos_lane, too_close_ahead);
             vector<int> lanes_to_explore = p.possible_lanes_to_explore(end_pos_lane);
             p.update_target_speed(too_close_ahead);
 
 
+            
             // create initial 2 points with right heading from the current car location
             // or the end of previous path
             if(path_size < 2)
@@ -179,6 +171,7 @@ int main() {
               prev_pos_y = end_pos_y - sin(ref_yaw)*1.0;
               ref_distance = 1.0;
               ref_speed = car_speed;
+              ref_end_s = car_s;
             }
             else
             {
@@ -191,32 +184,30 @@ int main() {
               ref_yaw = atan2(end_pos_y-prev_pos_y,end_pos_x-prev_pos_x);
               ref_distance = Helper::distance(end_pos_x, end_pos_y, prev_pos_x, prev_pos_y);
               ref_speed = ref_distance / p.time_interval_between_points;
+              ref_end_s = end_path_s;
+
             }
             vector<double> end_xyyawspeed = {end_pos_x, end_pos_y, ref_yaw, ref_speed};
             vector<double> prev_xyyawspeed = {prev_pos_x, prev_pos_y, ref_yaw, ref_speed};
 
+
             // generate trajectories
-            vector<vector<vector<double>>> all_fine_trajectories;
-            vector<double> all_costs;
-            vector<vector<vector<double>>> all_coarse_trajectories = p.generate_trajectory_coarse(lanes_to_explore, car_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            auto all_coarse_trajectories = p.generate_trajectory_coarse(lanes_to_explore, ref_end_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            vector<vector<vector<double>>> combined_trajectories;
             for (int i=0; i<all_coarse_trajectories.size(); i++)
             {
-              // build fine trajectory
-              vector<vector<double>> fine_trajectory_generated = p.generate_fine_trajectory_at_target_speed(all_coarse_trajectories[i][0], all_coarse_trajectories[i][1], end_xyyawspeed, verbose());
-              auto combined_fine_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, fine_trajectory_generated, p.num_points_in_trajectory);  
-              all_fine_trajectories.push_back(combined_fine_trajectory);
-              // calculate cost
-              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {end_path_s, end_path_d}, combined_fine_trajectory, map_waypoints_x, map_waypoints_y, sensor_fusion,  verbose());
+              auto combined_cur_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], path_size+all_coarse_trajectories[i][0].size());  
+              combined_trajectories.push_back(combined_cur_trajectory);
+            }
+
+
+            // calcualte costs
+            vector<double> all_costs;
+            for (int i=0; i<combined_trajectories.size(); i++)
+            {
+              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {end_path_s, end_path_d}, combined_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion, verbose());
               all_costs.push_back(cost);
             }
-
-
-            for (int i=0; i<lanes_to_explore.size(); i++)
-            {
-              cout << lanes_to_explore[i] << " ";
-            }
-            cout << p.state << " " << p.target_lane << endl;
-            Helper::debug_print("all costs: ", all_costs);
 
 
             // calculate minimum cost
@@ -230,12 +221,34 @@ int main() {
                 index = i;
               }
             }
+            cout << "target_lane: " << p.target_lane << " - index: " << index << endl;
             p.target_lane = lanes_to_explore[index];
+            cout << "target_lane: " << p.target_lane << " - lanes_to_explore[index]: " << lanes_to_explore[index] << endl;
+            cout << too_close_ahead << endl;
 
-            vector<vector<double>> selected_fine_trajectory = all_fine_trajectories[index];
 
+            // generate 
+            vector<double> next_x_points;
+            vector<double> next_y_points;
+            for (int i=0; i<p.num_points_in_trajectory; i++)
+            {
+              next_x_points.push_back(combined_trajectories[index][0][i]);
+              next_y_points.push_back(combined_trajectories[index][1][i]);
+            }
+            vector<vector<double>> selected_fine_trajectory = {next_x_points, next_y_points};
   
 
+
+            // for debugging
+            int tmp_cntr = get_counter();
+            if (tmp_cntr > 75 && tmp_cntr < 85) 
+            {
+              turn_verbose_on();
+            } 
+            else
+            {
+              turn_verbose_off();
+            }
             if (verbose())
 	          {
               cout << endl;
@@ -243,6 +256,12 @@ int main() {
               cout << "------------------------" << endl;
               cout << "counter: " << tmp_cntr << endl;
               cout << "------------------------" << endl;
+              for (int i=0; i<lanes_to_explore.size(); i++)
+              {
+                cout << lanes_to_explore[i] << " ";
+              }
+              cout << p.state << " " << p.target_lane << endl;
+              Helper::debug_print("all costs: ", all_costs);
               if (path_size<2)
               {
                 cout << "Starting with loop1 - path_size = " << path_size << endl;
@@ -259,13 +278,10 @@ int main() {
 	            Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
               Helper::debug_print("previous_path_x: ", previous_path_x);
               Helper::debug_print("previous_path_y: ", previous_path_y);
-	            cout << "number of generated coarse trajectories: " << all_coarse_trajectories.size() << endl;
-	            for (int i=0; i<all_coarse_trajectories.size(); i++)
-	            {
-	              cout << "trajectory " << i << endl;
-	              Helper::debug_print("map x_points: ", all_coarse_trajectories[i][0]);
-	              Helper::debug_print("map y_points: ", all_coarse_trajectories[i][1]);
-	            }
+	            cout << "number of generated trajectories: " << combined_trajectories.size() << endl;
+              cout << "selected trajectory - num points: " << selected_fine_trajectory[0].size() << endl;
+              Helper::debug_print("map x_points: ", selected_fine_trajectory[0]);
+              Helper::debug_print("map y_points: ", selected_fine_trajectory[1]);
 	            cout << "----------------" << endl;
             }
 

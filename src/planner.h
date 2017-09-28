@@ -71,7 +71,7 @@ public:
   vector<int> possible_lanes_to_explore(int ref_lane);
 
   // generate all possible tranjectories using only few points that are spaced far apart
-  vector<vector<vector<double>>> generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xy, vector<double> prev_xy, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
+  vector<vector<vector<double>>> generate_trajectory_coarse(vector<int> abs_possible_lanes, double car_s, vector<double> end_xyyaw, vector<double> prev_xyyaw, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y);
 
   // generate fine trajectory from coarse trajectory of a few points
   vector<vector<double>> generate_fine_trajectory_at_target_speed(vector<double> ptsx, vector<double> ptsy, vector<double> given_xyyaw, bool verbose);
