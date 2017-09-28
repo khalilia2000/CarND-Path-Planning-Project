@@ -31,6 +31,8 @@ void turn_verbose_on() {
   verbose_counter = 1;
 }
 
+// test
+double test = 0;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
