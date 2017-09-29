@@ -155,12 +155,20 @@ int main() {
             int path_size = previous_path_x.size();
 
 
-            int car_lane = p.get_lane_for_d(car_d);
             int end_pos_lane = p.get_lane_for_d(end_path_d);
             bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, p.get_lane_for_d(end_path_d), end_path_s, path_size * p.time_interval_between_points);
-            p.update_state(end_pos_lane, too_close_ahead);
+            p.update_state(too_close_ahead, end_path_d);
             vector<int> lanes_to_explore = p.possible_lanes_to_explore(end_pos_lane);
             p.update_target_speed(too_close_ahead);
+
+            double d_0 = p.distance_to_car_ahead(car_s, 0, sensor_fusion);
+            double d_1 = p.distance_to_car_ahead(car_s, 1, sensor_fusion);
+            double d_2 = p.distance_to_car_ahead(car_s, 2, sensor_fusion);
+            double v_0 = p.speed_of_car_ahead(car_s, 0, sensor_fusion);
+            double v_1 = p.speed_of_car_ahead(car_s, 1, sensor_fusion);
+            double v_2 = p.speed_of_car_ahead(car_s, 2, sensor_fusion);
+            cout << d_0 << " " << d_1 << " " << d_2 << " ";
+            cout << v_0 << " " << v_1 << " " << v_2 << endl;
 
             
             // create initial 2 points with right heading from the current car location
@@ -198,19 +206,22 @@ int main() {
 
             // generate trajectories
             auto all_coarse_trajectories = p.generate_trajectory_coarse(lanes_to_explore, ref_end_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            vector<vector<vector<double>>> combined_trajectories;
+            vector<vector<vector<double>>> combined_short_trajectories;
+            vector<vector<vector<double>>> combined_long_trajectories;
             for (int i=0; i<all_coarse_trajectories.size(); i++)
             {
-              auto combined_cur_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], p.num_points_in_trajectory);  
-              combined_trajectories.push_back(combined_cur_trajectory);
+              auto combined_short_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], p.num_points_in_trajectory);  
+              auto combined_long_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], path_size + all_coarse_trajectories[i][0].size());  
+              combined_short_trajectories.push_back(combined_short_trajectory);
+              combined_long_trajectories.push_back(combined_long_trajectory);
             }
 
 
             // calcualte costs
             vector<double> all_costs;
-            for (int i=0; i<combined_trajectories.size(); i++)
+            for (int i=0; i<combined_short_trajectories.size(); i++)
             {
-              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {end_path_s, end_path_d}, combined_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion, verbose());
+              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {car_s, car_d}, combined_long_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion, verbose());
               all_costs.push_back(cost);
             }
 
@@ -235,8 +246,8 @@ int main() {
             vector<double> next_y_points;
             for (int i=0; i<p.num_points_in_trajectory; i++)
             {
-              next_x_points.push_back(combined_trajectories[index][0][i]);
-              next_y_points.push_back(combined_trajectories[index][1][i]);
+              next_x_points.push_back(combined_short_trajectories[index][0][i]);
+              next_y_points.push_back(combined_short_trajectories[index][1][i]);
             }
             
  
@@ -272,16 +283,15 @@ int main() {
                 cout << "Starting with loop2 - path_size = " << path_size << endl; 
               }
               Helper::debug_print("car_yaw, ref_yaw: ", {car_yaw, ref_yaw});
-	          	Helper::debug_print("end_pos_lane: ", {(double)end_pos_lane});
 	            Helper::debug_print("car x,y,s,d,yaw, speed: ", {car_x, car_y, car_s, car_d, car_yaw, car_speed});
 	            Helper::debug_print("end_pos_x,y,s,d: ", {end_pos_x, end_pos_y, end_path_s, end_path_d});
 	            Helper::debug_print("prev_pos_x,y: ", {prev_pos_x, prev_pos_y});
 	            Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
 	            Helper::debug_print("previous_path_x: ", previous_path_x);
 	            Helper::debug_print("previous_path_y: ", previous_path_y);
-	            cout << "number of generated trajectories: " << combined_trajectories.size() << endl;
-                Helper::debug_print("map x_points: ", next_x_points);
-                Helper::debug_print("map y_points: ", next_y_points);
+	            cout << "number of generated trajectories: " << combined_short_trajectories.size() << endl;
+              Helper::debug_print("map x_points: ", next_x_points);
+              Helper::debug_print("map y_points: ", next_y_points);
 	            cout << "----------------" << endl;
             }
 

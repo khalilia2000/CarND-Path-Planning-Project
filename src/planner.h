@@ -56,6 +56,8 @@ public:
   double max_jerk = 10.0; 
   // target lane
   int target_lane = 1;
+  // only will be set if is_too_close_ahead returns true
+  double car_ahead_speed;
 
 
   // return current lane based on d
@@ -65,7 +67,7 @@ public:
   double get_d_for_lane(int lane);
 
   // update state
-  void update_state(int ref_lane, bool too_close_ahead);
+  void update_state(bool too_close_ahead, double end_d);
 
   // generate all possible states from the current state
   vector<int> possible_lanes_to_explore(int ref_lane);
@@ -100,8 +102,11 @@ public:
   // update target speed
   void update_target_speed(bool is_too_close_ahead);
 
-  // only will be set if is_too_close_ahead returns true
-  double car_ahead_speed;
+  // distance to car ahead
+  double distance_to_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion);
+
+  // speed of the car ahead
+  double speed_of_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion);
 
 };
 

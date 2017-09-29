@@ -25,17 +25,18 @@ double Planner::get_d_for_lane(int lane)
 
 
 // update state
-void Planner::update_state(int ref_lane, bool too_close_ahead)
+void Planner::update_state(bool too_close_ahead, double end_d)
 {
+  double target_d = get_d_for_lane(target_lane);
   if (state=="KL" && too_close_ahead)
   {
     state = "ECL";
   }
-  else if (state=="PCL" && ref_lane==target_lane)
+  else if (state=="PCL" && abs(target_d-end_d)<0.2)
   {
     state = "KL";
   }
-  else if (state=="ECL" && target_lane!=ref_lane)
+  else if (state=="ECL" && abs(target_d-end_d)>0.2)
   {
     state = "PCL";
   }
@@ -69,8 +70,8 @@ vector<int> Planner::possible_lanes_to_explore(int ref_lane)
   }
  
   //return possible_lanes;
-  //return possible_lanes;
-  return {ref_lane};
+  return possible_lanes;
+  //return {ref_lane};
 }
 
 
@@ -95,8 +96,8 @@ vector<vector<vector<double>>> Planner::generate_trajectory_coarse(vector<int> l
     vector<double> pts_y;
 
     double target1_s = ref_s + 30;
-    double target2_s = target1_s + 30;
-    double target3_s = target2_s + 30;
+    double target2_s = target1_s + 5;
+    double target3_s = target2_s + 5;
     double target1_d = get_d_for_lane(ref_lane);
     double target2_d = target1_d;
     double target3_d = target2_d;
@@ -655,11 +656,32 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
   {
     if ((is_too_close_ahead && (target_speed > car_ahead_speed)) || target_speed > max_speed - 0.5)
     {
-      target_speed -= 0.1;
+      target_speed -= 0.3;
     }
     else if (target_speed < max_speed - 0.5)
     {
-      target_speed += 0.4; 
+      target_speed += 0.3; 
     }
+  }
+
+
+  // distance to car ahead
+  double Planner::distance_to_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion)
+  {
+    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    double car_ahead_s = car_ahead[5];
+    return (car_ahead_s - ref_s);
+  }
+
+
+  // speed of the car ahead
+  double Planner::speed_of_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion)
+  {
+    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    double car_ahead_vx = car_ahead[3];
+    double car_ahead_vy = car_ahead[4];
+    double car_ahead_speed = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
+    car_ahead_speed *= conversion_factor_mps_to_mph;
+    return (car_ahead_speed);
   }
 
