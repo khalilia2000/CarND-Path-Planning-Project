@@ -100,6 +100,9 @@ public:
   // update target speed
   void update_target_speed(bool is_too_close_ahead);
 
+  // only will be set if is_too_close_ahead returns true
+  double car_ahead_speed;
+
 };
 
 #endif /* PLANNERH_ */

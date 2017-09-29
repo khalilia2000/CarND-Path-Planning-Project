@@ -11,6 +11,7 @@
 #include "spline.h"
 #include "helper.h"
 #include "planner.h"
+#include "PID.h"
 
 using namespace std;
 
@@ -98,6 +99,7 @@ int main() {
   Planner p;
   p.target_speed = 5.0;
 
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&p](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
 
@@ -160,7 +162,6 @@ int main() {
             vector<int> lanes_to_explore = p.possible_lanes_to_explore(end_pos_lane);
             p.update_target_speed(too_close_ahead);
 
-
             
             // create initial 2 points with right heading from the current car location
             // or the end of previous path
@@ -185,7 +186,7 @@ int main() {
               prev_pos_y = previous_path_y[path_size-2];
               ref_yaw = atan2(end_pos_y-prev_pos_y,end_pos_x-prev_pos_x);
               ref_distance = Helper::distance(end_pos_x, end_pos_y, prev_pos_x, prev_pos_y);
-              ref_speed = ref_distance / p.time_interval_between_points;
+              ref_speed = ref_distance / p.time_interval_between_points * p.conversion_factor_mps_to_mph;
               ref_end_s = end_path_s;
 
             }
@@ -193,6 +194,7 @@ int main() {
             vector<double> prev_xyyawspeed = {prev_pos_x, prev_pos_y, ref_yaw, ref_speed};
             vector<double> car_xyyawspeed = {car_x, car_y, Helper::deg2rad(car_yaw), car_speed};
 
+            
 
             // generate trajectories
             auto all_coarse_trajectories = p.generate_trajectory_coarse(lanes_to_explore, ref_end_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);

@@ -69,7 +69,8 @@ vector<int> Planner::possible_lanes_to_explore(int ref_lane)
   }
  
   //return possible_lanes;
-  return possible_lanes;
+  //return possible_lanes;
+  return {ref_lane};
 }
 
 
@@ -613,6 +614,7 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
   bool Planner::is_too_close_ahead(vector<vector<double>> sensor_fusion, int ref_lane, double ref_s, double time_shift)
   {
     // check other vehicles
+    car_ahead_speed = 100;
     for (int i=0; i<sensor_fusion.size(); i++)
     {
       double check_d = sensor_fusion[i][6];
@@ -627,21 +629,33 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
 
         if ((check_s>ref_s) && (check_s-ref_s < safe_distance_from_other_cars))
         {
-          return true;
+          if (check_v < car_ahead_speed)
+          {
+            car_ahead_speed = check_v*conversion_factor_mps_to_mph;
+          }
+          
         }
       }
     }
 
-    return false;
+    if (car_ahead_speed<100)
+    {
+      return true;
+    }
+    else 
+    {
+      return false;
+    }
+    
   }
 
 
   // update target speed
   void Planner::update_target_speed(bool is_too_close_ahead) 
   {
-    if (is_too_close_ahead || (target_speed > max_speed - 0.5))
+    if ((is_too_close_ahead && (target_speed > car_ahead_speed)) || target_speed > max_speed - 0.5)
     {
-      target_speed -= 0.2;
+      target_speed -= 0.1;
     }
     else if (target_speed < max_speed - 0.5)
     {
