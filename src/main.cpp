@@ -31,8 +31,6 @@ void turn_verbose_on() {
   verbose_counter = 1;
 }
 
-// test
-double test = 0;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -98,7 +96,7 @@ int main() {
 
   // AK defined variables
   Planner p;
-  p.target_speed = 0;
+  p.target_speed = 5.0;
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&p](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -140,7 +138,10 @@ int main() {
 
             // AK Begin
 
-	          // Define all variables
+          	// automatically adjust number of points in trajectory so that the car is more responsive at lower speeds.
+            p.num_points_in_trajectory = (int)(floor(p.target_speed));
+
+            // Define all variables
             double end_pos_x = 0; 
             double end_pos_y = 0;
             double ref_yaw = 0;
@@ -154,7 +155,6 @@ int main() {
 
             int car_lane = p.get_lane_for_d(car_d);
             int end_pos_lane = p.get_lane_for_d(end_path_d);
-            cout << "end_path_d, end_pos_lane" << end_path_d << " " << end_pos_lane << endl;
             bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, p.get_lane_for_d(end_path_d), end_path_s, path_size * p.time_interval_between_points);
             p.update_state(end_pos_lane, too_close_ahead);
             vector<int> lanes_to_explore = p.possible_lanes_to_explore(end_pos_lane);
@@ -191,6 +191,7 @@ int main() {
             }
             vector<double> end_xyyawspeed = {end_pos_x, end_pos_y, ref_yaw, ref_speed};
             vector<double> prev_xyyawspeed = {prev_pos_x, prev_pos_y, ref_yaw, ref_speed};
+            vector<double> car_xyyawspeed = {car_x, car_y, Helper::deg2rad(car_yaw), car_speed};
 
 
             // generate trajectories
@@ -198,7 +199,7 @@ int main() {
             vector<vector<vector<double>>> combined_trajectories;
             for (int i=0; i<all_coarse_trajectories.size(); i++)
             {
-              auto combined_cur_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], path_size+all_coarse_trajectories[i][0].size());  
+              auto combined_cur_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], p.num_points_in_trajectory);  
               combined_trajectories.push_back(combined_cur_trajectory);
             }
 
@@ -223,10 +224,8 @@ int main() {
                 index = i;
               }
             }
-            cout << "target_lane: " << p.target_lane << " - index: " << index << endl;
             p.target_lane = lanes_to_explore[index];
-            cout << "target_lane: " << p.target_lane << " - lanes_to_explore[index]: " << lanes_to_explore[index] << endl;
-            cout << too_close_ahead << endl;
+            
 
 
             // generate 
@@ -237,13 +236,11 @@ int main() {
               next_x_points.push_back(combined_trajectories[index][0][i]);
               next_y_points.push_back(combined_trajectories[index][1][i]);
             }
-            vector<vector<double>> selected_fine_trajectory = {next_x_points, next_y_points};
-  
-
-
+            
+ 
             // for debugging
             int tmp_cntr = get_counter();
-            if (tmp_cntr > 75 && tmp_cntr < 85) 
+            if (tmp_cntr > 85 && tmp_cntr < 85) 
             {
               turn_verbose_on();
             } 
@@ -278,12 +275,11 @@ int main() {
 	            Helper::debug_print("end_pos_x,y,s,d: ", {end_pos_x, end_pos_y, end_path_s, end_path_d});
 	            Helper::debug_print("prev_pos_x,y: ", {prev_pos_x, prev_pos_y});
 	            Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
-              Helper::debug_print("previous_path_x: ", previous_path_x);
-              Helper::debug_print("previous_path_y: ", previous_path_y);
+	            Helper::debug_print("previous_path_x: ", previous_path_x);
+	            Helper::debug_print("previous_path_y: ", previous_path_y);
 	            cout << "number of generated trajectories: " << combined_trajectories.size() << endl;
-              cout << "selected trajectory - num points: " << selected_fine_trajectory[0].size() << endl;
-              Helper::debug_print("map x_points: ", selected_fine_trajectory[0]);
-              Helper::debug_print("map y_points: ", selected_fine_trajectory[1]);
+                Helper::debug_print("map x_points: ", next_x_points);
+                Helper::debug_print("map y_points: ", next_y_points);
 	            cout << "----------------" << endl;
             }
 
@@ -292,8 +288,8 @@ int main() {
 
             json msgJson;
 
-          	msgJson["next_x"] = selected_fine_trajectory[0];
-          	msgJson["next_y"] = selected_fine_trajectory[1];
+          	msgJson["next_x"] = next_x_points;
+          	msgJson["next_y"] = next_y_points;
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
 

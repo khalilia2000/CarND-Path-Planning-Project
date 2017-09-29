@@ -37,7 +37,7 @@ public:
   // target speed
   double target_speed = 0;
   // number of points to send to simulator
-  int num_points_in_trajectory = 50;
+  int num_points_in_trajectory = 5;
   // time interval between points
   double time_interval_between_points = 0.02;
   // safe distance to the car in front

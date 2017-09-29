@@ -641,7 +641,7 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
   {
     if (is_too_close_ahead || (target_speed > max_speed - 0.5))
     {
-      target_speed -= 0.4;
+      target_speed -= 0.2;
     }
     else if (target_speed < max_speed - 0.5)
     {
