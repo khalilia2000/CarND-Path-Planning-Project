@@ -293,19 +293,11 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
   vector<vector<double>> xy_traj, vector<double> maps_x, vector<double> maps_y, vector<vector<double>> sensor_fusion, bool verbose) 
 {
 
-  bool collision = will_collide(sensor_fusion, xy_traj, 0, get_lane_for_d(car_sd[1]), car_sd[0]);
+  bool collision = will_collide(sensor_fusion, xy_traj, car_sd[0], num_points_in_trajectory);
   if (collision)
   {
     return 1e10;
   }
-
-
-  // if (verbose)
-  // {
-  //   Helper::debug_print("x,y,yaw,speed: ", car_xyyawspeed);
-  //   Helper::debug_print("passed on x_traj: ", xy_traj[0]);
-  //   Helper::debug_print("passed on y_traj: ", xy_traj[1]);
-  // }
 
   // current car locations
   double ref_x = car_xyyawspeed[0];
@@ -323,10 +315,8 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
 	// convert trajectory to both vehicle coordinates + Frenet coordinates
 	vector<double> t_seq = {}; // vehicle coordinate tangent
 	vector<double> n_seq = {}; // vehcile coordinate normal
-	vector<vector<double>> tn_traj; // trajectory in vehicle coordinates
   vector<double> s_seq = {}; // s coordinate
   vector<double> d_seq = {}; // d coordinate
-  vector<vector<double>> sd_traj; // trajectory in Frenet coordinates
 	for (int i=0; i<xy_traj[0].size(); i++) 
 	{
 		// calcualte vehicle coordinates
@@ -348,139 +338,84 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
     s_seq.push_back({sd_coords[0]});
     d_seq.push_back({sd_coords[1]});
 	}
-	tn_traj.push_back(t_seq);
-	tn_traj.push_back(n_seq);
-  sd_traj.push_back(s_seq);
-  sd_traj.push_back(d_seq);
+	
 
-	// calculate the speed vectors
-	vector<double> speed_abs;
-	for (int i=0; i<xy_traj[0].size(); i++) 
-	{
-		double v_abs = 0;
-		if (i==0)
-		{
-			v_abs = Helper::distance(ref_x, ref_y, xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-    }
-		else
-		{
-			v_abs = Helper::distance(xy_traj[0][i-1], xy_traj[1][i-1], xy_traj[0][i], xy_traj[1][i])/time_interval_between_points;
-    }
-		speed_abs.push_back(v_abs);
+  int start_lane = get_lane_for_d(car_sd[1]);
+  int end_lane = get_lane_for_d(d_seq.back());
 
-	}
-
-
-  // calculate the acceleration vectors
-  vector<double> acc_abs;
-  for (int i=0; i<speed_abs.size(); i++) 
+  double dist_to_car_ahead = distance_to_nearby_car(car_sd[0], end_lane, sensor_fusion, true);
+  double dist_to_car_behind = distance_to_nearby_car(car_sd[0], end_lane, sensor_fusion, false);
+  double speed_of_car_ahead = speed_of_nearby_car(car_sd[0], end_lane, sensor_fusion, true);
+  bool is_there_car_ahead = is_there_any_car_nearby(car_sd[0], end_lane, sensor_fusion, true);
+  bool is_there_car_behind = is_there_any_car_nearby(car_sd[0], end_lane, sensor_fusion, false);
+  
+  // encourage faster speeds
+  double cost = 0;
+  if (!is_there_car_ahead)
   {
-    double a_abs = 0;
-    if (i==0)
-    {
-      a_abs = abs(speed_abs[i]-ref_v_abs)/time_interval_between_points;
-    }
-    else
-    {
-      a_abs = abs(speed_abs[i]-speed_abs[i-1])/time_interval_between_points;
-    }
-    
-    acc_abs.push_back(a_abs);
+    cost += -100;
+  }
+  else if (dist_to_car_ahead<collision_distance)
+  {
+    cost += 100;
+  }
+  else 
+  {
+    cost += 100-(dist_to_car_ahead-collision_distance);
   }
 
-
-  // calcualte the jerk vectors
-  vector<double> jerk_abs;
-  for (int i=1; i<acc_abs.size(); i++) 
+  if (is_there_car_behind && abs(dist_to_car_behind)<passing_distance)
   {
-    double j_abs = 0;
-    j_abs = abs(acc_abs[i]-acc_abs[i-1])/time_interval_between_points;
-    jerk_abs.push_back(j_abs);
+    cost += 250;
   }
-
-  // if (verbose)
-  // {
-  //   Helper::debug_print("speed_abs: ", speed_abs);
-  //   Helper::debug_print("acc_abs: ", acc_abs);
-  //   Helper::debug_print("jerk_abs: ", jerk_abs);
-  // }
-
   
 
-  // encourage faster speeds
-  double cost1 = 0;
-  cost1 = (ref_s-sd_traj[0].back())*10;
-
-	return cost1;
+	return cost;
 }
 
 
 // determine if trajectory collides with another car,
-// xy_trajectory starts at delta t
 // sensor_fusion is for time 0
-bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<double>> xy_trajectory, double delta_t, int car_lane, double car_s)
+bool Planner::will_collide(vector<vector<double>> sensor_fusion, vector<vector<double>> xy_trajectory, double car_s, int num_points_to_check)
 {
   
-  bool result = false;
-  vector<int> possible_lanes = possible_lanes_to_explore(car_lane);
+  vector<vector<double>> cars_to_check_sf;
 
-  for (int i=0; i<possible_lanes.size(); i++)
+  for (int i=0; i<number_of_lanes; i++)
   {
-    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, possible_lanes[i], car_s);
-    vector<double> car_behind= sensor_fusion_data_for_car_behind(sensor_fusion, possible_lanes[i], car_s);
-
-    // define variables for car ahead
-    int other_car_id = car_ahead[0];
-    double other_car_x = car_ahead[1];
-    double other_car_y = car_ahead[2];
-    double other_car_vx = car_ahead[3];
-    double other_car_vy = car_ahead[4];
-    double other_car_s = car_ahead[5];
-
-    // calculate the distance shift due to time lag of xy_trajectory
-    double delta_x = other_car_vx * delta_t;
-    double delta_y = other_car_vy * delta_t;
-
-    // check for collision with the specified trajectory
-    for (int j=0; j<xy_trajectory[0].size(); j++)
-    {
-      double now_x = other_car_x + other_car_vx * (j+1) * time_interval_between_points + delta_x;
-      double now_y = other_car_y + other_car_vy * (j+1) * time_interval_between_points + delta_y;
-      if (Helper::distance(now_x, now_y, xy_trajectory[0][j], xy_trajectory[1][j]) <= collision_distance) 
-      {
-          result = true;
-      } 
-    }
-
-    if (possible_lanes[i] != car_lane)
-    {
-      // define variables for car behind
-      other_car_id = car_behind[0];
-      other_car_x = car_behind[1];
-      other_car_y = car_behind[2];
-      other_car_vx = car_behind[3];
-      other_car_vy = car_behind[4];
-      other_car_s = car_behind[5];
-
-      // calculate the distance shift due to time lag of xy_trajectory
-      delta_x = other_car_vx * delta_t;
-      delta_y = other_car_vy * delta_t;
-
-      // check for collision with the specified trajectory
-      for (int j=0; j<xy_trajectory[0].size(); j++)
-      {
-        double now_x = other_car_x + other_car_vx * (j+1) * time_interval_between_points + delta_x;
-        double now_y = other_car_y + other_car_vy * (j+1) * time_interval_between_points + delta_y;
-        if (Helper::distance(now_x, now_y, xy_trajectory[0][j], xy_trajectory[1][j]) <= collision_distance) 
-          {
-            result = true;
-          } 
-      }
-    }
-
+    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, i, car_s);
+    vector<double> car_behind = sensor_fusion_data_for_car_behind(sensor_fusion, i, car_s);
+    if (car_ahead.size()!=0) {cars_to_check_sf.push_back(car_ahead);}
+    if (car_behind.size()!=0) {cars_to_check_sf.push_back(car_behind);}
   }
 
-  return result;
+
+  for (int i=0; i<cars_to_check_sf.size(); i++)
+  {
+    vector<double> check_car = cars_to_check_sf[i];
+    double check_x = check_car[1];
+    double check_y = check_car[2];
+    double check_vx = check_car[3];
+    double check_vy = check_car[4];
+    double check_v = sqrt(check_vx*check_vx + check_vy*check_vy);
+
+    double cur_x = check_x;
+    double cur_y = check_y;
+
+    // check trajectory for collision
+    for (int j=0; j<num_points_to_check; j++)
+    {
+      // calculate distance with other car
+      double cur_dist = Helper::distance(cur_x, cur_y, xy_trajectory[0][j], xy_trajectory[1][j]);
+      if (cur_dist<collision_distance) {return true;}
+
+      // update location
+      cur_x += check_vx * time_interval_between_points;
+      cur_y += check_vy * time_interval_between_points;
+    }
+  }
+
+  return false;
 }
 
 // return sensor_fusion data for the car immediately ahead in the specified lane
@@ -488,7 +423,8 @@ vector<double> Planner::sensor_fusion_data_for_car_ahead(vector<vector<double>> 
 {
 
   double min_s = 10000.0;  
-  int result_index = 0;
+  int result_index = -1;
+  vector<double> result_sf = {};
 
   for (int i=0; i<sensor_fusion.size(); i++)
     {
@@ -500,10 +436,11 @@ vector<double> Planner::sensor_fusion_data_for_car_ahead(vector<vector<double>> 
         {
           min_s = check_s;
           result_index = i;
+          result_sf = sensor_fusion[result_index];
         }
       }
     }
-  return (sensor_fusion[result_index]);
+  return result_sf;
 }
 
 
@@ -512,7 +449,8 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
 {
 
   double max_s = -10000.0;  
-  int result_index = 0;
+  int result_index = -1;
+  vector<double> result_sf = {};
 
   for (int i=0; i<sensor_fusion.size(); i++)
     {
@@ -524,10 +462,11 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
         {
           max_s = check_s;
           result_index = i;
+          result_sf = sensor_fusion[result_index];
         }
       }
     }
-  return (sensor_fusion[result_index]);
+  return result_sf;
 }
 
 
@@ -614,74 +553,121 @@ vector<double> Planner::sensor_fusion_data_for_car_behind(vector<vector<double>>
   // determine if the vehicle is too close to the car ahead
   bool Planner::is_too_close_ahead(vector<vector<double>> sensor_fusion, int ref_lane, double ref_s, double time_shift)
   {
-    // check other vehicles
-    car_ahead_speed = 100;
-    for (int i=0; i<sensor_fusion.size(); i++)
+
+    // get sensor fusion data
+    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    if (car_ahead.size()!=0)
     {
-      double check_d = sensor_fusion[i][6];
-      if (get_lane_for_d(check_d) == ref_lane)
-      {
-        double check_vx = sensor_fusion[i][3];
-        double check_vy = sensor_fusion[i][4];
-        double check_v = sqrt(check_vx*check_vx + check_vy*check_vy);
-        double check_s = sensor_fusion[i][5];
+      double check_vx = car_ahead[3];
+      double check_vy = car_ahead[4];
+      double check_v = sqrt(check_vx*check_vx + check_vy*check_vy);
+      double check_s = car_ahead[5] + time_shift * check_v;
 
-        check_s += time_shift * check_v;
-
-        if ((check_s>ref_s) && (check_s-ref_s < safe_distance_from_other_cars))
-        {
-          if (check_v < car_ahead_speed)
-          {
-            car_ahead_speed = check_v*conversion_factor_mps_to_mph;
-          }
-          
-        }
-      }
+      if (check_s-ref_s < safe_distance_from_other_cars) {return true;}
     }
 
-    if (car_ahead_speed<100)
-    {
-      return true;
-    }
-    else 
-    {
-      return false;
-    }
-    
+    return false;
   }
 
 
   // update target speed
-  void Planner::update_target_speed(bool is_too_close_ahead) 
+  void Planner::update_target_speed(bool is_too_close_ahead, double speed_of_car_ahead) 
   {
-    if ((is_too_close_ahead && (target_speed > car_ahead_speed)) || target_speed > max_speed - 0.5)
+    if ((is_too_close_ahead && (target_speed > speed_of_car_ahead)) || target_speed > max_speed - 0.5)
     {
-      target_speed -= 0.3;
+      target_speed -= 0.2;
     }
     else if (target_speed < max_speed - 0.5)
     {
-      target_speed += 0.3; 
+      target_speed += 0.30; 
+    }
+  }
+
+
+  // determines if there is any car nearby
+  bool Planner::is_there_any_car_nearby(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead)
+  {
+
+    // get sensor fusion data
+    vector<double> nearby_car;
+    if (ahead)
+    {
+      nearby_car = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    }
+    else
+    {
+      nearby_car = sensor_fusion_data_for_car_behind(sensor_fusion, ref_lane, ref_s); 
+    }
+
+    // return result
+    if (nearby_car.size()==0)
+    {
+      return false;
+    }
+    else
+    {
+      return true;
     }
   }
 
 
   // distance to car ahead
-  double Planner::distance_to_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion)
+  double Planner::distance_to_nearby_car(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead)
   {
-    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
-    double car_ahead_s = car_ahead[5];
-    return (car_ahead_s - ref_s);
+
+    // get sensor fusion data
+    vector<double> nearby_car;
+    if (ahead)
+    {
+      nearby_car = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    }
+    else
+    {
+      nearby_car = sensor_fusion_data_for_car_behind(sensor_fusion, ref_lane, ref_s); 
+    }
+
+    // calculate s
+    double nearby_car_s;
+    if (nearby_car.size()==0)
+    {
+      nearby_car_s = ref_s;
+    }
+    else
+    {
+      nearby_car_s = nearby_car[5]; 
+    }
+    return (nearby_car_s - ref_s);
   }
 
 
   // speed of the car ahead
-  double Planner::speed_of_car_ahead(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion)
+  double Planner::speed_of_nearby_car(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead)
   {
-    vector<double> car_ahead = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
-    double car_ahead_vx = car_ahead[3];
-    double car_ahead_vy = car_ahead[4];
-    double car_ahead_speed = sqrt(car_ahead_vx*car_ahead_vx + car_ahead_vy*car_ahead_vy);
-    car_ahead_speed *= conversion_factor_mps_to_mph;
-    return (car_ahead_speed);
+
+    // get sensor fusion data
+    vector<double> nearby_car;
+    if (ahead)
+    {
+      nearby_car = sensor_fusion_data_for_car_ahead(sensor_fusion, ref_lane, ref_s);
+    }
+    else
+    {
+      nearby_car = sensor_fusion_data_for_car_behind(sensor_fusion, ref_lane, ref_s); 
+    }
+
+    // calculate v
+    double nearby_car_speed;
+    if (nearby_car.size()==0)
+    {
+      nearby_car_speed = -1;
+    }
+    else
+    {
+      double nearby_car_vx = nearby_car[3];
+      double nearby_car_vy = nearby_car[4];
+      nearby_car_speed = sqrt(nearby_car_vx*nearby_car_vx + nearby_car_vy*nearby_car_vy) * conversion_factor_mps_to_mph;
+    }
+    return (nearby_car_speed);
+
   }
 

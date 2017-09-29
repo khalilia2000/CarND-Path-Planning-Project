@@ -156,19 +156,20 @@ int main() {
 
 
             int end_pos_lane = p.get_lane_for_d(end_path_d);
-            bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, p.get_lane_for_d(end_path_d), end_path_s, path_size * p.time_interval_between_points);
+            bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, end_pos_lane, end_path_s, path_size * p.time_interval_between_points);
             p.update_state(too_close_ahead, end_path_d);
             vector<int> lanes_to_explore = p.possible_lanes_to_explore(end_pos_lane);
-            p.update_target_speed(too_close_ahead);
+            double speed_of_car_ahead = p.speed_of_nearby_car(car_s, end_pos_lane, sensor_fusion, true);
+            p.update_target_speed(too_close_ahead, speed_of_car_ahead);
 
-            double d_0 = p.distance_to_car_ahead(car_s, 0, sensor_fusion);
-            double d_1 = p.distance_to_car_ahead(car_s, 1, sensor_fusion);
-            double d_2 = p.distance_to_car_ahead(car_s, 2, sensor_fusion);
-            double v_0 = p.speed_of_car_ahead(car_s, 0, sensor_fusion);
-            double v_1 = p.speed_of_car_ahead(car_s, 1, sensor_fusion);
-            double v_2 = p.speed_of_car_ahead(car_s, 2, sensor_fusion);
-            cout << d_0 << " " << d_1 << " " << d_2 << " ";
-            cout << v_0 << " " << v_1 << " " << v_2 << endl;
+            // double d_0 = p.distance_to_nearby_car(car_s, 0, sensor_fusion, true);
+            // double d_1 = p.distance_to_nearby_car(car_s, 1, sensor_fusion, true);
+            // double d_2 = p.distance_to_nearby_car(car_s, 2, sensor_fusion, true);
+            // double v_0 = p.speed_of_nearby_car(car_s, 0, sensor_fusion, true);
+            // double v_1 = p.speed_of_nearby_car(car_s, 1, sensor_fusion, true);
+            // double v_2 = p.speed_of_nearby_car(car_s, 2, sensor_fusion, true);
+            // cout << d_0 << " " << d_1 << " " << d_2 << " ";
+            // cout << v_0 << " " << v_1 << " " << v_2 << endl;
 
             
             // create initial 2 points with right heading from the current car location
@@ -224,7 +225,6 @@ int main() {
               double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {car_s, car_d}, combined_long_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion, verbose());
               all_costs.push_back(cost);
             }
-
 
             // calculate minimum cost
             double min_cost = 1e20;
