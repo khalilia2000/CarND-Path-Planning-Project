@@ -11,7 +11,6 @@
 #include "spline.h"
 #include "helper.h"
 #include "planner.h"
-#include "PID.h"
 
 using namespace std;
 
@@ -77,7 +76,7 @@ int main() {
 
   // AK defined variables
   Planner p;
-  p.target_speed = 5.0;
+  p.target_speed = 7.5;
 
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&p](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,

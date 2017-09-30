@@ -342,7 +342,7 @@ void Planner::update_target_speed(bool is_too_close_ahead, double speed_of_car_a
 {
   if ((is_too_close_ahead && (target_speed > speed_of_car_ahead)) || target_speed > max_speed - 0.5)
   {
-    target_speed -= 0.10;
+    target_speed -= 0.15;
   }
   else if (target_speed < max_speed - 0.5)
   {
