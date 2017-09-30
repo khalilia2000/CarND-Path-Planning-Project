@@ -76,7 +76,7 @@ int main() {
 
   // AK defined variables
   Planner p;
-  p.target_speed = 7.5;
+  p.target_speed = 5;
 
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&p](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -188,9 +188,10 @@ int main() {
             vector<double> all_costs;
             for (int i=0; i<combined_trajectories.size(); i++)
             {
-              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {car_s, car_d}, combined_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion);
+              double cost = p.estimate_cost_for_trajectory(car_xyyawspeed, {car_s, car_d}, combined_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion);
               all_costs.push_back(cost);
             }
+
 
             // find the minimum cost
             double min_cost = 1e20;

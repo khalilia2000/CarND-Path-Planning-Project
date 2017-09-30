@@ -45,7 +45,7 @@ public:
   // collision distance - limit beyond whitch cars will collide
   double collision_distance = 3;
   // passing distance - minimum distance from car behind before changing lanes
-  double passing_distance = 7;
+  double passing_distance = 10;
   // meter per second to mile per house conversion factor - multiply mps by this factor to get mph
   double conversion_factor_mps_to_mph = 2.23694;
   // smoothing ratio at the end of tranjecotires to make sure car is parallel ot the road
@@ -94,7 +94,7 @@ public:
   void update_target_speed(bool is_too_close_ahead, double speed_of_car_ahead);
 
   // distance to car ahead
-  double distance_to_nearby_car(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead);
+  double distance_to_nearby_car(double ref_s, int ref_lane, vector<double> ref_xy, vector<vector<double>> sensor_fusion, bool ahead);
 
   // speed of the car ahead
   double speed_of_nearby_car(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead);

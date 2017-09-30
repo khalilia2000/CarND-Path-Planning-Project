@@ -94,7 +94,7 @@ vector<vector<vector<double>>> Planner::generate_trajectories(vector<int> lanes_
     vector<double> pts_x; 
     vector<double> pts_y;
 
-    double target1_s = ref_s + 30;
+    double target1_s = ref_s + 40;
     double target2_s = target1_s + 10;
     double target3_s = target2_s + 10;
     double target1_d = get_d_for_lane(ref_lane);
@@ -191,12 +191,12 @@ double Planner::estimate_cost_for_trajectory(vector<double> car_xyyawspeed, vect
   int end_lane = get_lane_for_d(sd_coords[1]);
 
   // cars ahead and behind the end of trajectory
-  double dist_to_car_ahead = distance_to_nearby_car(car_sd[0], end_lane, sensor_fusion, true);
-  double dist_to_car_behind = distance_to_nearby_car(car_sd[0], end_lane, sensor_fusion, false);
+  double dist_to_car_ahead = distance_to_nearby_car(car_sd[0], end_lane, car_xyyawspeed, sensor_fusion, true);
+  double dist_to_car_behind = distance_to_nearby_car(car_sd[0], end_lane, car_xyyawspeed, sensor_fusion, false);
   double speed_of_car_ahead = speed_of_nearby_car(car_sd[0], end_lane, sensor_fusion, true);
   bool is_there_car_ahead = is_there_any_car_nearby(car_sd[0], end_lane, sensor_fusion, true);
   bool is_there_car_behind = is_there_any_car_nearby(car_sd[0], end_lane, sensor_fusion, false);
-  
+
   // calcualte cost
   double cost = 0;
   if (!is_there_car_ahead)
@@ -342,11 +342,11 @@ void Planner::update_target_speed(bool is_too_close_ahead, double speed_of_car_a
 {
   if ((is_too_close_ahead && (target_speed > speed_of_car_ahead)) || target_speed > max_speed - 0.5)
   {
-    target_speed -= 0.15;
+    target_speed *= 0.99;
   }
-  else if (target_speed < max_speed - 0.5)
+  else if (target_speed < max_speed - 1.0)
   {
-    target_speed += 0.30; 
+    target_speed *= 1.01;
   }
 }
 
@@ -379,7 +379,7 @@ bool Planner::is_there_any_car_nearby(double ref_s, int ref_lane, vector<vector<
 
 
 // distance to car ahead
-double Planner::distance_to_nearby_car(double ref_s, int ref_lane, vector<vector<double>> sensor_fusion, bool ahead)
+double Planner::distance_to_nearby_car(double ref_s, int ref_lane, vector<double> ref_xy, vector<vector<double>> sensor_fusion, bool ahead)
 {
 
   // get sensor fusion data
@@ -393,17 +393,13 @@ double Planner::distance_to_nearby_car(double ref_s, int ref_lane, vector<vector
     nearby_car = sensor_fusion_data_for_car_behind(sensor_fusion, ref_lane, ref_s); 
   }
 
-  // calculate s
-  double nearby_car_s;
-  if (nearby_car.size()==0)
+  // calculate distance
+  double distance = -1;
+  if (nearby_car.size()!=0)
   {
-    nearby_car_s = ref_s;
+    distance = Helper::distance(ref_xy[0], ref_xy[1], nearby_car[1], nearby_car[2]); 
   }
-  else
-  {
-    nearby_car_s = nearby_car[5]; 
-  }
-  return (nearby_car_s - ref_s);
+  return distance;
 }
 
 
