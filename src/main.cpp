@@ -18,20 +18,6 @@ using namespace std;
 // for convenience
 using json = nlohmann::json;
 
-// verbose state for debugging
-int verbose_counter = 0;
-bool verbose() { 
-	return (verbose_counter>0); 
-}
-
-void turn_verbose_off() {
-  verbose_counter = 0;
-}
-
-void turn_verbose_on() {
-  verbose_counter = 1;
-}
-
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -48,12 +34,6 @@ string hasData(string s) {
   return "";
 }
 
-int master_counter = 0;
-int get_counter() 
-{
-	master_counter++;
-	return(master_counter);
-}
 
 
 int main() {
@@ -141,9 +121,9 @@ int main() {
             // AK Begin
 
           	// automatically adjust number of points in trajectory so that the car is more responsive at lower speeds.
-            p.num_points_in_trajectory = (int)(floor(p.target_speed));
+            p.num_points_in_trajectory = (int)(floor(p.target_speed*0.7));
 
-            // Define all variables
+            // Define all required variables
             double end_pos_x = 0; 
             double end_pos_y = 0;
             double ref_yaw = 0;
@@ -155,6 +135,7 @@ int main() {
             int path_size = previous_path_x.size();
 
 
+            // update state and speed
             int end_pos_lane = p.get_lane_for_d(end_path_d);
             bool too_close_ahead = p.is_too_close_ahead(sensor_fusion, end_pos_lane, end_path_s, path_size * p.time_interval_between_points);
             p.update_state(too_close_ahead, end_path_d);
@@ -162,18 +143,8 @@ int main() {
             double speed_of_car_ahead = p.speed_of_nearby_car(car_s, end_pos_lane, sensor_fusion, true);
             p.update_target_speed(too_close_ahead, speed_of_car_ahead);
 
-            // double d_0 = p.distance_to_nearby_car(car_s, 0, sensor_fusion, true);
-            // double d_1 = p.distance_to_nearby_car(car_s, 1, sensor_fusion, true);
-            // double d_2 = p.distance_to_nearby_car(car_s, 2, sensor_fusion, true);
-            // double v_0 = p.speed_of_nearby_car(car_s, 0, sensor_fusion, true);
-            // double v_1 = p.speed_of_nearby_car(car_s, 1, sensor_fusion, true);
-            // double v_2 = p.speed_of_nearby_car(car_s, 2, sensor_fusion, true);
-            // cout << d_0 << " " << d_1 << " " << d_2 << " ";
-            // cout << v_0 << " " << v_1 << " " << v_2 << endl;
-
             
-            // create initial 2 points with right heading from the current car location
-            // or the end of previous path
+            // create  2 points with right heading from the current car location or the end of previous path
             if(path_size < 2)
             {
               end_pos_x = car_x; 
@@ -203,30 +174,26 @@ int main() {
             vector<double> prev_xyyawspeed = {prev_pos_x, prev_pos_y, ref_yaw, ref_speed};
             vector<double> car_xyyawspeed = {car_x, car_y, Helper::deg2rad(car_yaw), car_speed};
 
-            
 
             // generate trajectories
-            auto all_coarse_trajectories = p.generate_trajectory_coarse(lanes_to_explore, ref_end_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            vector<vector<vector<double>>> combined_short_trajectories;
-            vector<vector<vector<double>>> combined_long_trajectories;
-            for (int i=0; i<all_coarse_trajectories.size(); i++)
+            auto end_trajectories = p.generate_trajectories(lanes_to_explore, ref_end_s, end_xyyawspeed, prev_xyyawspeed, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            vector<vector<vector<double>>> combined_trajectories;
+            for (int i=0; i<end_trajectories.size(); i++)
             {
-              auto combined_short_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], p.num_points_in_trajectory);  
-              auto combined_long_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, all_coarse_trajectories[i], path_size + all_coarse_trajectories[i][0].size());  
-              combined_short_trajectories.push_back(combined_short_trajectory);
-              combined_long_trajectories.push_back(combined_long_trajectory);
+              auto combined_trajectory = Helper::combine_trajectories({previous_path_x, previous_path_y}, end_trajectories[i], path_size + end_trajectories[i][0].size());  
+              combined_trajectories.push_back(combined_trajectory);
             }
 
 
             // calcualte costs
             vector<double> all_costs;
-            for (int i=0; i<combined_short_trajectories.size(); i++)
+            for (int i=0; i<combined_trajectories.size(); i++)
             {
-              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {car_s, car_d}, combined_long_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion, verbose());
+              double cost = p.estimate_cost_for_trajectory(end_xyyawspeed, {car_s, car_d}, combined_trajectories[i], map_waypoints_x, map_waypoints_y, sensor_fusion);
               all_costs.push_back(cost);
             }
 
-            // calculate minimum cost
+            // find the minimum cost
             double min_cost = 1e20;
             int index = -1;
             for (int i=0; i<all_costs.size(); i++)
@@ -238,61 +205,15 @@ int main() {
               }
             }
             p.target_lane = lanes_to_explore[index];
-            
 
 
-            // generate 
+            // generate output trajectories to be passed on to simulator with correct number of points
             vector<double> next_x_points;
             vector<double> next_y_points;
             for (int i=0; i<p.num_points_in_trajectory; i++)
             {
-              next_x_points.push_back(combined_short_trajectories[index][0][i]);
-              next_y_points.push_back(combined_short_trajectories[index][1][i]);
-            }
-            
- 
-            // for debugging
-            int tmp_cntr = get_counter();
-            if (tmp_cntr > 85 && tmp_cntr < 85) 
-            {
-              turn_verbose_on();
-            } 
-            else
-            {
-              turn_verbose_off();
-            }
-            if (verbose())
-	          {
-              cout << endl;
-              cout << endl;
-              cout << "------------------------" << endl;
-              cout << "counter: " << tmp_cntr << endl;
-              cout << "------------------------" << endl;
-              for (int i=0; i<lanes_to_explore.size(); i++)
-              {
-                cout << lanes_to_explore[i] << " ";
-              }
-              cout << p.state << " " << p.target_lane << endl;
-              Helper::debug_print("all costs: ", all_costs);
-              if (path_size<2)
-              {
-                cout << "Starting with loop1 - path_size = " << path_size << endl;
-              }
-              else
-              {
-                cout << "Starting with loop2 - path_size = " << path_size << endl; 
-              }
-              Helper::debug_print("car_yaw, ref_yaw: ", {car_yaw, ref_yaw});
-	            Helper::debug_print("car x,y,s,d,yaw, speed: ", {car_x, car_y, car_s, car_d, car_yaw, car_speed});
-	            Helper::debug_print("end_pos_x,y,s,d: ", {end_pos_x, end_pos_y, end_path_s, end_path_d});
-	            Helper::debug_print("prev_pos_x,y: ", {prev_pos_x, prev_pos_y});
-	            Helper::debug_print("ref_yaw, ref_speed: ", {ref_yaw, ref_speed});
-	            Helper::debug_print("previous_path_x: ", previous_path_x);
-	            Helper::debug_print("previous_path_y: ", previous_path_y);
-	            cout << "number of generated trajectories: " << combined_short_trajectories.size() << endl;
-              Helper::debug_print("map x_points: ", next_x_points);
-              Helper::debug_print("map y_points: ", next_y_points);
-	            cout << "----------------" << endl;
+              next_x_points.push_back(combined_trajectories[index][0][i]);
+              next_y_points.push_back(combined_trajectories[index][1][i]);
             }
 
               
